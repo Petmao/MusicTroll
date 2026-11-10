@@ -9,10 +9,15 @@ final class MineRouter: ObservableObject {
     @Published var device = false
 }
 
+struct MineTheme {
+    static let bg = Color(red: 0.04, green: 0.04, blue: 0.06)
+    static let pink = Color(red: 1, green: 0.37, blue: 0.62)
+    static let gold = Color(red: 1, green: 0.82, blue: 0.44)
+}
+
 struct RootView: View {
     @EnvironmentObject var auth: AuthStore
     @State private var tab = 0
-
     var body: some View {
         ZStack {
             MineTheme.bg.ignoresSafeArea()
@@ -23,26 +28,17 @@ struct RootView: View {
         }
         .preferredColorScheme(.dark)
     }
-
     @ViewBuilder private var content: some View {
         if tab == 0 {
             HomeView()
         } else if tab == 1 {
-            if auth.ent.canUseVideo { EyesView() }
-            else { PaywallView(need: "SVIP", feature: "养眼视频") }
+            if auth.ent.canUseVideo { EyesView() } else { PaywallView(need: "SVIP", feature: "养眼视频") }
         } else if tab == 2 {
-            if auth.ent.canPlayMusic { PlayerView() }
-            else { PaywallView(need: "VIP", feature: "在线听歌") }
+            if auth.ent.canPlayMusic { PlayerView() } else { PaywallView(need: "VIP", feature: "在线听歌") }
         } else {
             MineView()
         }
     }
-}
-
-struct MineTheme {
-    static let bg = Color(red: 0.04, green: 0.04, blue: 0.06)
-    static let pink = Color(red: 1, green: 0.37, blue: 0.62)
-    static let gold = Color(red: 1, green: 0.82, blue: 0.44)
 }
 
 struct TabBarView: View {
@@ -82,6 +78,11 @@ struct TabItemView: View {
 struct MineView: View {
     @EnvironmentObject var auth: AuthStore
     @StateObject private var r = MineRouter()
+    @ObservedObject private var engine = MusicEngine.shared
+
+    private var recentNames: [String] {
+        engine.recent.prefix(8).map { $0.name }
+    }
 
     var body: some View {
         NavigationView {
@@ -91,13 +92,17 @@ struct MineView: View {
                     VStack(spacing: 0) {
                         MineMemberCard(nickname: auth.user?.nickname ?? "未登录") { r.settings = true }
                         MineQuickRow(checkin: $r.checkin, invite: $r.invite, fav: $r.fav).padding(.top, 11)
-                        MineRecentRow(engine: MusicEngine.shared).padding(.top, 14)
-                        MineGrid(fav: $r.fav, cloud: $r.cloud, device: $r.device, settings: $r.settings).padding(.top, 14)
+                        MineRecentRow(names: recentNames, onPlay: { name in engine.play(keyword: name) })
+                            .padding(.top, 14)
+                        MineGrid(fav: $r.fav, cloud: $r.cloud, device: $r.device, settings: $r.settings)
+                            .padding(.top, 14)
                         MinePlaylists { r.fav = true }.padding(.top, 14)
                         MineSettingsRow { r.settings = true }.padding(.top, 14)
                         Text("屿声音乐 " + Config.version)
-                            .font(.system(size: 9.5)).foregroundColor(.white.opacity(0.2))
-                            .padding(.top, 14).padding(.bottom, 24)
+                            .font(.system(size: 9.5))
+                            .foregroundColor(.white.opacity(0.2))
+                            .padding(.top, 14)
+                            .padding(.bottom, 24)
                     }
                     .padding(.horizontal, 16)
                 }
@@ -225,7 +230,6 @@ struct MineQuickRow: View {
     @Binding var checkin: Bool
     @Binding var invite: Bool
     @Binding var fav: Bool
-
     var body: some View {
         HStack(spacing: 8) {
             MinePill(icon: "heart.fill", title: "收藏", color: MineTheme.pink) { fav = true }
@@ -256,7 +260,9 @@ struct MinePill: View {
 }
 
 struct MineRecentRow: View {
-    @ObservedObject var engine: MusicEngine
+    let names: [String]
+    let onPlay: (String) -> Void
+
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
@@ -264,11 +270,13 @@ struct MineRecentRow: View {
                 Spacer()
                 Text("清空").font(.system(size: 11)).foregroundColor(.gray)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 9) {
-                    ForEach(Array(engine.recent.prefix(8)), id: \.id) { s in
-                        MineRecentCell(name: s.name, singer: s.singer) {
-                            engine.play(keyword: s.name)
+            if names.isEmpty {
+                Text("还没有播放记录").font(.system(size: 10)).foregroundColor(.gray)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 9) {
+                        ForEach(Array(names.enumerated()), id: \.offset) { _, name in
+                            MineRecentCell(name: name) { onPlay(name) }
                         }
                     }
                 }
@@ -279,7 +287,6 @@ struct MineRecentRow: View {
 
 struct MineRecentCell: View {
     let name: String
-    let singer: String
     let onTap: () -> Void
     var body: some View {
         Button(action: onTap) {
@@ -289,9 +296,9 @@ struct MineRecentCell: View {
                                                   Color(red: 1, green: 0.54, blue: 0)],
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 70, height: 70)
-                Text(name).font(.system(size: 10, weight: .semibold)).lineLimit(1)
-                    .frame(width: 70, alignment: .leading)
-                Text(singer).font(.system(size: 8.5)).foregroundColor(.gray).lineLimit(1)
+                Text(name)
+                    .font(.system(size: 10, weight: .semibold))
+                    .lineLimit(1)
                     .frame(width: 70, alignment: .leading)
             }
         }
@@ -304,7 +311,6 @@ struct MineGrid: View {
     @Binding var cloud: Bool
     @Binding var device: Bool
     @Binding var settings: Bool
-
     var body: some View {
         HStack(spacing: 8) {
             MineTile(icon: "heart.fill", title: "收藏\n与歌单", color: MineTheme.pink) { fav = true }
@@ -390,7 +396,8 @@ struct MineSettingsRow: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("设置").font(.system(size: 13, weight: .semibold))
                     Text("音源 · 视频源 · 精确跳转 · 退出登录")
-                        .font(.system(size: 11)).foregroundColor(.gray)
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(.white.opacity(0.3))
