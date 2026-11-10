@@ -10,15 +10,18 @@ struct SettingsView: View {
     @State private var videoURL = ""
     @State private var loadingSources = true
 
+    private var isAdmin: Bool { auth.ent.canManageSources }
+
     var body: some View {
         ZStack {
             MineTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 10) {
                     gradientBanner
-                    sources
+                    if isAdmin { sources }
                     appearance
                     audio
+                    infoCard
                     logoutCard
                 }
                 .padding(.horizontal, 14)
@@ -28,7 +31,7 @@ struct SettingsView: View {
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadSources() }
+        .task { if isAdmin { await loadSources() } }
         .alert("退出登录", isPresented: $showLogout) {
             Button("取消", role: .cancel) {}
             Button("退出", role: .destructive) { auth.logout() }
@@ -37,7 +40,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: 渐变长条
     private var gradientBanner: some View {
         ZStack(alignment: .bottomLeading) {
             RoundedRectangle(cornerRadius: 18)
@@ -46,11 +48,10 @@ struct SettingsView: View {
                                               Color(red: 0.48, green: 0.36, blue: 1)],
                                      startPoint: .leading, endPoint: .trailing))
                 .frame(height: 92)
-                .overlay(
-                    LinearGradient(colors: [.white.opacity(0.35), .clear],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
-                )
+            LinearGradient(colors: [.white.opacity(0.30), .clear],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+                .frame(height: 92)
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("屿声音乐").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
@@ -75,7 +76,13 @@ struct SettingsView: View {
 
     private var sources: some View {
         VStack(alignment: .leading, spacing: 0) {
-            label("源地址").padding(.bottom, 6)
+            HStack(spacing: 6) {
+                label("源地址")
+                Text("仅管理员可见").font(.system(size: 9)).foregroundColor(MineTheme.gold.opacity(0.8))
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(Capsule().fill(MineTheme.gold.opacity(0.15)))
+            }
+            .padding(.bottom, 6)
             NavigationLink(destination: MusicSourceSettingsView()) {
                 row("音乐音源", musicURL.isEmpty ? (loadingSources ? "读取中…" : "未配置，点此添加") : musicURL)
             }
@@ -90,7 +97,7 @@ struct SettingsView: View {
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(MineTheme.gold.opacity(0.18), lineWidth: 0.8))
     }
 
     private func row(_ title: String, _ sub: String) -> some View {
@@ -164,6 +171,26 @@ struct SettingsView: View {
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.05)))
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
+    }
+
+    private var infoCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            label("关于")
+            infoRow("音乐与视频内容", "由管理员统一配置，App 仅做解析与播放")
+            infoRow("本地缓存", "AES-256-GCM 设备密钥加密")
+            infoRow("账号", auth.user?.nickname ?? "—")
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
+    }
+
+    private func infoRow(_ t: String, _ v: String) -> some View {
+        HStack(alignment: .top) {
+            Text(t).font(.system(size: 11.5)).foregroundColor(.white.opacity(0.6)).frame(width: 92, alignment: .leading)
+            Text(v).font(.system(size: 11)).foregroundColor(.white.opacity(0.4))
+            Spacer()
+        }
     }
 
     private var logoutCard: some View {
