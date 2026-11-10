@@ -5,7 +5,7 @@ import Foundation
 enum Config {
 
     static let apiBaseURL: URL = {
-        // 两段 Base64："https://" + "ys.irepo.cn"
+        // 两段 Base64："https://" + 域名
         let parts = ["aHR0cHM6Ly8=", "eXMuaXJlcG8uY24="]
         let joined = parts.compactMap { Data(base64Encoded: $0) }
                            .compactMap { String(data: $0, encoding: .utf8) }
@@ -18,7 +18,17 @@ enum Config {
     static let appNameShort = "屿声"
     static let appNameEn = "Isle"
     static let tagline = "让音乐回到你手里"
-    static let version = "1.1.4"
+
+    /// 真实版本号（取自 Info.plist，构建时由 build.sh 写入）
+    static var version: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"
+    }
+
+    /// 构建标识：用来区分同版本号的不同构建
+    static var buildStamp: String {
+        let d = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "0"
+        return "\(version) (\(d))"
+    }
 
     /// 免责声明（登录页与关于页共用）
     static let disclaimer = """
