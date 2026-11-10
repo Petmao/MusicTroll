@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var auth: AuthStore
+
     @State private var isRegister = false
     @State private var account = ""
     @State private var password = ""
@@ -9,19 +10,29 @@ struct LoginView: View {
     @State private var phone = ""
     @State private var invite = ""
 
+    private enum Field: Hashable { case nickname, account, password, phone, invite }
+    @FocusState private var focused: Field?
+
     var body: some View {
         ZStack {
             LinearGradient(colors: [Color(red: 0.24, green: 0.06, blue: 0.28),
                                     Color(red: 0.03, green: 0.03, blue: 0.05)],
-                           startPoint: .top, endPoint: .bottom).ignoresSafeArea()
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    header
-                        .padding(.top, 32)
-
+                    header.padding(.top, 32)
                     switcher.padding(.top, 22)
 
-                    VStack(spacing: 12) { fields }.padding(.top, 16)
+                    VStack(spacing: 0) {
+                        row("昵称", $nickname, "person", .nickname, secure: false, visible: isRegister)
+                        row("账号（字母开头，4–16 位）", $account, "at", .account, secure: false, visible: true)
+                        row("密码（至少 8 位）", $password, "lock", .password, secure: true, visible: true)
+                        row("手机号（选填）", $phone, "phone", .phone, secure: false, visible: isRegister)
+                        row("邀请码（选填）", $invite, "gift", .invite, secure: false, visible: isRegister)
+                    }
+                    .padding(.top, 16)
 
                     if let e = auth.error {
                         Text(e)
@@ -29,22 +40,22 @@ struct LoginView: View {
                             .foregroundStyle(Color(red: 1, green: 0.45, blue: 0.6))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 4)
+                            .padding(.top, 10)
                     }
 
                     submitButton.padding(.top, 18)
-
                     featureList.padding(.top, 26)
-
                     disclaimer.padding(.top, 20)
 
                     Text("v\(Config.version)")
                         .font(.system(size: 10))
                         .foregroundStyle(Color.white.opacity(0.18))
                         .padding(.top, 14)
-                        .padding(.bottom, 28)
+                        .padding(.bottom, 30)
                 }
                 .padding(.horizontal, 24)
             }
+            .onTapGesture { focused = nil }
         }
     }
 
@@ -62,7 +73,6 @@ struct LoginView: View {
                     .font(.system(size: 40, weight: .semibold))
                     .foregroundStyle(Color.white)
             }
-
             Text(Config.appName).font(.system(size: 26, weight: .heavy))
             Text(Config.appNameEn.uppercased())
                 .font(.system(size: 10, weight: .semibold))
@@ -75,7 +85,7 @@ struct LoginView: View {
         }
     }
 
-    // MARK: - 登录/注册切换
+    // MARK: - 切换
     private var switcher: some View {
         HStack(spacing: 4) {
             seg("登录", 0)
@@ -89,10 +99,9 @@ struct LoginView: View {
     private func seg(_ title: String, _ index: Int) -> some View {
         let active = (isRegister ? 1 : 0) == index
         return Button {
-            withAnimation(.easeOut(duration: 0.2)) {
-                isRegister = index == 1
-                auth.error = nil
-            }
+            focused = nil
+            isRegister = (index == 1)
+            auth.error = nil
         } label: {
             Text(title)
                 .font(.system(size: 14, weight: .semibold))
@@ -107,32 +116,28 @@ struct LoginView: View {
                                              startPoint: .leading, endPoint: .trailing))
                 .clipShape(RoundedRectangle(cornerRadius: 11))
         }
+        .buttonStyle(PlainButtonStyle())
     }
 
-    // MARK: - 输入区
+    // MARK: - 输入行（始终在视图树里，只切显示，避免 iOS 15 焦点重建崩溃）
     @ViewBuilder
-    private var fields: some View {
-        if isRegister { field("昵称", $nickname, "person") }
-        field("账号（字母开头，4–16 位）", $account, "at")
-        field("密码（至少 8 位）", $password, "lock", secure: true)
-        if isRegister {
-            field("手机号（选填）", $phone, "phone")
-            field("邀请码（选填）", $invite, "gift")
-        }
-    }
-
-    private func field(_ title: String, _ binding: Binding<String>, _ symbol: String, secure: Bool = false) -> some View {
+    private func row(_ title: String, _ binding: Binding<String>, _ symbol: String,
+                     _ id: Field, secure: Bool, visible: Bool) -> some View {
         HStack(spacing: 10) {
             Image(systemName: symbol)
                 .font(.system(size: 15))
                 .foregroundStyle(Color.white.opacity(0.4))
                 .frame(width: 20)
+
             if secure {
-                SecureField(title, text: binding).textInputAutocapitalization(.never)
+                SecureField(title, text: binding)
+                    .focused($focused, equals: id)
+                    .submitLabel(.done)
             } else {
                 TextField(title, text: binding)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled(true)
+                    .focused($focused, equals: id)
+                    .keyboardType(id == .phone ? .numberPad : .default)
+                    .submitLabel(id == .password ? .done : .next)
             }
         }
         .font(.system(size: 15))
@@ -141,11 +146,17 @@ struct LoginView: View {
         .background(Color.white.opacity(0.06))
         .overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.white.opacity(0.1), lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 15))
+        .padding(.bottom, visible ? 10 : 0)
+        .frame(height: visible ? nil : 0)
+        .opacity(visible ? 1 : 0)
+        .clipped()
+        .allowsHitTesting(visible)
     }
 
     // MARK: - 主按钮
     private var submitButton: some View {
-        Button(action: submit) {
+        let ready = !account.isEmpty && password.count >= 8 && !auth.loading
+        return Button(action: submit) {
             HStack(spacing: 8) {
                 if auth.loading { ProgressView().tint(Color.white) }
                 Text(isRegister ? "注册并登录" : "登录")
@@ -160,8 +171,9 @@ struct LoginView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: Color(red: 1, green: 0.24, blue: 0.47).opacity(0.35), radius: 16, y: 8)
         }
-        .disabled(auth.loading || account.isEmpty || password.count < 8)
-        .opacity(account.isEmpty || password.count < 8 ? 0.55 : 1)
+        .buttonStyle(PlainButtonStyle())
+        .disabled(!ready)
+        .opacity(ready ? 1 : 0.55)
     }
 
     // MARK: - 卖点
@@ -216,6 +228,7 @@ struct LoginView: View {
     }
 
     private func submit() {
+        focused = nil
         Task {
             if isRegister {
                 await auth.register(account: account,
