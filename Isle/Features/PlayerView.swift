@@ -1,222 +1,220 @@
 import SwiftUI
-import AVFoundation
 
 struct PlayerView: View {
-    @EnvironmentObject var auth: AuthStore
     @StateObject private var engine = MusicEngine.shared
-    @ObservedObject private var fav = FavoritesStore.shared
-    @State private var keyword = "坠落星空"
+    @State private var angle: Double = 0
     @State private var showLyrics = false
-
-    private var title: String { engine.current?.title ?? "还没播放" }
-    private var artist: String { engine.current?.artist ?? "下面搜索框找歌" }
-    private var isFav: Bool { fav.contains(title, artist) }
+    @State private var showList = false
+    @State private var dragging = false
 
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [Color(red: 0.16, green: 0.05, blue: 0.22),
-                                    Color(red: 0.03, green: 0.03, blue: 0.05)],
-                           startPoint: .top, endPoint: .bottom).ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
+        GeometryReader { geo in
+            let disc = min(geo.size.width - 60, 300)
+            ZStack {
+                Color(red: 0.04, green: 0.04, blue: 0.06).ignoresSafeArea()
                 VStack(spacing: 0) {
                     topBar
-                    vinyl.padding(.top, 4)
-                    infoRow.padding(.top, 14)
-                    lyricButton.padding(.top, 12)
-                    progressBar.padding(.top, 12)
-                    controls.padding(.top, 10)
-                    searchRow.padding(.top, 16).padding(.bottom, 24)
+                    Spacer(minLength: 0)
+                    discView(disc)
+                    Spacer(minLength: 0)
+                    infoRow
+                    lyricEntry.padding(.top, 14)
+                    progressBlock.padding(.top, 16)
+                    controls.padding(.top, 20)
+                    homeBar.padding(.top, 18)
                 }
                 .padding(.horizontal, 22)
+                .padding(.top, 6)
+                .padding(.bottom, 6)
             }
         }
         .sheet(isPresented: $showLyrics) { LyricsView() }
+        .sheet(isPresented: $showList) { PlaylistSheet() }
+        .onReceive(engine.$isPlaying) { playing in
+            if playing { startSpin() } else { withAnimation(.linear(duration: 0.4)) { } }
+        }
     }
 
     private var topBar: some View {
         HStack {
-            Image(systemName: "chevron.down").font(.system(size: 17)).foregroundColor(.white.opacity(0.75))
+            Button { } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(Color(white: 0.62))
+            }
             Spacer()
-            Text("正在播放").font(.system(size: 11.5)).tracking(2).foregroundColor(.white.opacity(0.55))
+            Text("正在播放").font(.system(size: 11)).tracking(2).foregroundColor(Color(white: 0.55))
             Spacer()
-            HStack(spacing: 14) {
-                Image(systemName: "square.and.arrow.up").font(.system(size: 15))
-                Image(systemName: "ellipsis").font(.system(size: 15))
-            }.foregroundColor(.white.opacity(0.75))
+            Button { showList = true } label: {
+                Image(systemName: "list.bullet").font(.system(size: 17)).foregroundColor(Color(white: 0.62))
+            }
         }
-        .padding(.top, 14)
+        .frame(height: 44)
     }
 
-    private var vinyl: some View {
-        TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            let discAngle = engine.isPlaying ? (t.truncatingRemainder(dividingBy: 9) / 9) * 360 : 0
-            let ringAngle = engine.isPlaying ? (t.truncatingRemainder(dividingBy: 3.2) / 3.2) * 360 : 0
-            ZStack {
-                Circle()
-                    .fill(AngularGradient(gradient: Gradient(colors: [
-                        Color(red: 1, green: 0.48, blue: 0.24), Color(red: 1, green: 0.18, blue: 0.47),
-                        Color(red: 0.75, green: 0.25, blue: 0.48), Color(red: 0.48, green: 0.36, blue: 1),
-                        Color(red: 1, green: 0.48, blue: 0.24)]), center: .center))
-                    .frame(width: 288, height: 288).blur(radius: 18).opacity(0.6)
-                    .rotationEffect(.degrees(ringAngle * 0.5))
-
-                Circle()
-                    .stroke(AngularGradient(gradient: Gradient(colors: [
-                        .clear, Color(red: 1, green: 0.48, blue: 0.24), Color(red: 1, green: 0.18, blue: 0.47),
-                        Color(red: 0.48, green: 0.36, blue: 1), .clear]), center: .center), lineWidth: 5)
-                    .frame(width: 264, height: 264)
-                    .rotationEffect(.degrees(ringAngle))
-                    .shadow(color: Color(red: 1, green: 0.18, blue: 0.47).opacity(0.6), radius: 8)
-
-                Circle().fill(Color.white).frame(width: 8, height: 8)
-                    .offset(y: -132)
-                    .shadow(color: .white.opacity(0.8), radius: 6)
-                    .rotationEffect(.degrees(ringAngle))
-
-                ZStack {
-                    Circle()
-                        .fill(RadialGradient(gradient: Gradient(colors: [
-                            Color(red: 0.10, green: 0.10, blue: 0.12), Color(red: 0.04, green: 0.04, blue: 0.05)]),
-                                             center: .center, startRadius: 20, endRadius: 130))
-                        .overlay(Circle().stroke(Color.white.opacity(0.05), lineWidth: 1).scaleEffect(0.94))
-                        .overlay(Circle().stroke(Color.white.opacity(0.04), lineWidth: 1).scaleEffect(0.86))
-                    Circle()
-                        .fill(LinearGradient(colors: [Color(red: 1, green: 0.62, blue: 0.35),
-                                                      Color(red: 0.76, green: 0.25, blue: 0.45),
-                                                      Color(red: 0.23, green: 0.10, blue: 0.32)],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 100, height: 100)
-                        .overlay(Image(systemName: engine.isPlaying ? "waveform" : "music.note")
-                                    .font(.system(size: 32)).foregroundColor(.white.opacity(0.65)))
-                    Circle().fill(Color.black.opacity(0.9)).frame(width: 9, height: 9)
-                        .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 2))
-                }
-                .frame(width: 232, height: 232)
-                .rotationEffect(.degrees(discAngle))
-                .shadow(color: .black.opacity(0.6), radius: 22, y: 14)
-
-                VStack(spacing: 0) {
-                    Circle().fill(LinearGradient(colors: [.white, Color(white: 0.6)],
-                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 24, height: 24)
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(LinearGradient(colors: [Color(white: 0.92), Color(white: 0.55)],
-                                             startPoint: .top, endPoint: .bottom))
-                        .frame(width: 5, height: 62)
-                }
-                .rotationEffect(.degrees(22), anchor: .top)
-                .offset(x: 102, y: -100)
-            }
-            .frame(height: 292)
+    private func discView(_ size: CGFloat) -> some View {
+        ZStack {
+            Circle()
+                .stroke(AngularGradient(gradient: Gradient(colors: [.clear,
+                                                                   Color(red: 1, green: 0.48, blue: 0.24),
+                                                                   Color(red: 1, green: 0.18, blue: 0.47),
+                                                                   Color(red: 0.48, green: 0.36, blue: 1),
+                                                                   .clear]),
+                                        center: .center),
+                        lineWidth: 5)
+                .frame(width: size, height: size)
+            Circle()
+                .fill(RadialGradient(colors: [Color(red: 0.08, green: 0.08, blue: 0.11),
+                                              Color(red: 0.03, green: 0.03, blue: 0.05)],
+                                     center: .center, startRadius: size * 0.15, endRadius: size * 0.5))
+                .frame(width: size - 12, height: size - 12)
+            Circle()
+                .fill(LinearGradient(colors: [Color(red: 1, green: 0.60, blue: 0.39),
+                                              Color(red: 0.76, green: 0.25, blue: 0.48),
+                                              Color(red: 0.23, green: 0.11, blue: 0.32)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: size * 0.40, height: size * 0.40)
+                .overlay(Circle().stroke(Color.black.opacity(0.5), lineWidth: 8))
+                .overlay(Image(systemName: "music.note")
+                            .font(.system(size: size * 0.12))
+                            .foregroundColor(.white.opacity(0.75)))
+                .rotationEffect(.degrees(angle))
         }
+        .frame(width: size, height: size)
     }
 
     private var infoRow: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(title).font(.system(size: 20, weight: .heavy)).lineLimit(1)
-                Text(artist).font(.system(size: 12)).foregroundColor(.white.opacity(0.55)).lineLimit(1)
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(engine.currentSong?.name ?? "未在播放")
+                    .font(.system(size: 20, weight: .heavy))
+                    .lineLimit(1)
+                Text(engine.currentSong?.singer ?? "去搜索或点一首歌")
+                    .font(.system(size: 11)).foregroundColor(.gray).lineLimit(1)
             }
-            Spacer()
-            Button {
-                fav.toggle(title: title, artist: artist)
-            } label: {
-                Image(systemName: isFav ? "heart.fill" : "heart").font(.system(size: 20))
-                    .foregroundColor(isFav ? Color(red: 1, green: 0.37, blue: 0.62) : .white.opacity(0.85))
+            Spacer(minLength: 12)
+            HStack(spacing: 16) {
+                Button { engine.toggleFav() } label: {
+                    Image(systemName: engine.isFav ? "heart.fill" : "heart")
+                        .font(.system(size: 17))
+                        .foregroundColor(engine.isFav ? Color(red: 1, green: 0.37, blue: 0.62) : .white.opacity(0.85))
+                }
+                Button { engine.downloadCurrent() } label: {
+                    Image(systemName: "arrow.down.to.line").font(.system(size: 17)).foregroundColor(.white.opacity(0.85))
+                }
             }
-            Image(systemName: "arrow.down.to.line").font(.system(size: 18)).foregroundColor(.white.opacity(0.85))
         }
     }
 
-    private var lyricButton: some View {
+    private var lyricEntry: some View {
         Button { showLyrics = true } label: {
-            VStack(spacing: 4) {
-                Text(engine.status).font(.system(size: 14.5, weight: .bold)).foregroundColor(.white)
-                Text("点这里看全部歌词").font(.system(size: 11)).foregroundColor(.white.opacity(0.35))
+            VStack(spacing: 3) {
+                Text(engine.currentLyricLine.isEmpty ? "暂无歌词" : engine.currentLyricLine)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white.opacity(0.92))
+                    .lineLimit(1)
+                Text("点这里看全部歌词").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.35))
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(PlainButtonStyle())
     }
 
-    private var progressBar: some View {
+    private var progressBlock: some View {
         VStack(spacing: 7) {
             GeometryReader { g in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.18))
-                    Capsule().fill(Color.white).frame(width: g.size.width * CGFloat(engine.progress))
-                    Circle().fill(Color.white).frame(width: 12, height: 12)
-                        .shadow(color: .white.opacity(0.7), radius: 5)
-                        .offset(x: max(0, g.size.width * CGFloat(engine.progress) - 6))
+                    Capsule().fill(Color.white.opacity(0.18)).frame(height: 3)
+                    Capsule().fill(Color.white)
+                        .frame(width: max(0, g.size.width * engine.progress), height: 3)
+                    Circle().fill(Color.white).frame(width: 11, height: 11)
+                        .offset(x: max(0, g.size.width * engine.progress - 5.5))
                 }
+                .frame(height: 14)
                 .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0).onEnded { v in
-                    engine.seek(to: Double(max(0, min(1, v.location.x / g.size.width))))
-                })
-            }.frame(height: 14)
+                .gesture(DragGesture(minimumDistance: 0).onChanged { v in
+                    dragging = true
+                    engine.seek(to: min(1, max(0, v.location.x / g.size.width)))
+                }.onEnded { _ in dragging = false })
+            }
+            .frame(height: 14)
+
             HStack {
-                Text(fmt(engine.progress * 240)); Spacer(); Text("4:00")
-            }.font(.system(size: 10.5)).foregroundColor(.white.opacity(0.55))
+                Text(engine.timeText(engine.position)).font(.system(size: 10.5)).foregroundColor(.white.opacity(0.55))
+                Spacer()
+                Text(engine.timeText(engine.duration)).font(.system(size: 10.5)).foregroundColor(.white.opacity(0.55))
+            }
         }
     }
 
     private var controls: some View {
         HStack {
-            Image(systemName: "shuffle").font(.system(size: 18)).foregroundColor(.white.opacity(0.65))
-            Spacer()
-            Button { engine.seek(to: max(0, engine.progress - 0.05)) } label: {
-                Image(systemName: "backward.fill").font(.system(size: 24)).foregroundColor(.white)
+            Button { engine.toggleShuffle() } label: {
+                Image(systemName: "shuffle")
+                    .font(.system(size: 17))
+                    .foregroundColor(engine.shuffle ? Color(red: 1, green: 0.37, blue: 0.62) : .white.opacity(0.6))
             }
             Spacer()
-            Button {
-                if engine.current == nil { Task { await engine.play(keyword: keyword) } }
-                else { engine.toggle() }
-            } label: {
+            Button { engine.prev() } label: {
+                Image(systemName: "backward.fill").font(.system(size: 21)).foregroundColor(.white)
+            }
+            Spacer()
+            Button { engine.toggle() } label: {
                 ZStack {
-                    Circle().fill(Color.white).frame(width: 62, height: 62)
-                        .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
-                    if engine.status == "搜索中…" || engine.status == "取播放票据…" {
-                        ProgressView().tint(Color(red: 0.07, green: 0.06, blue: 0.09))
-                    } else {
-                        Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(Color(red: 0.07, green: 0.06, blue: 0.09))
-                    }
+                    Circle().fill(Color.white).frame(width: 64, height: 64)
+                    Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 22)).foregroundColor(.black)
+                        .offset(x: engine.isPlaying ? 0 : 2)
                 }
             }
             Spacer()
-            Button { engine.seek(to: min(1, engine.progress + 0.05)) } label: {
-                Image(systemName: "forward.fill").font(.system(size: 24)).foregroundColor(.white)
+            Button { engine.next() } label: {
+                Image(systemName: "forward.fill").font(.system(size: 21)).foregroundColor(.white)
             }
             Spacer()
-            Image(systemName: "list.bullet").font(.system(size: 18)).foregroundColor(.white.opacity(0.65))
-        }
-    }
-
-    private var searchRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundColor(.white.opacity(0.4))
-            TextField("搜歌名 / 歌手，回车播放", text: $keyword)
-                .font(.system(size: 13)).foregroundColor(.white)
-                .submitLabel(.search)
-                .onSubmit { Task { await engine.play(keyword: keyword) } }
-            Button { Task { await engine.play(keyword: keyword) } } label: {
-                Text("播放").font(.system(size: 12, weight: .bold))
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(LinearGradient(colors: [Color(red: 1, green: 0.24, blue: 0.47),
-                                                        Color(red: 1, green: 0.48, blue: 0.18)],
-                                               startPoint: .leading, endPoint: .trailing))
-                    .clipShape(Capsule())
+            Button { showList = true } label: {
+                Image(systemName: "list.bullet").font(.system(size: 17)).foregroundColor(.white.opacity(0.6))
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(Color.white.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
-    private func fmt(_ sec: Double) -> String {
-        let s = Int(max(0, sec))
-        return String(format: "%d:%02d", s / 60, s % 60)
+    private var homeBar: some View {
+        Capsule().fill(Color.white.opacity(0.22))
+            .frame(width: 120, height: 4)
+            .padding(.bottom, 2)
+    }
+
+    private func startSpin() {
+        withAnimation(.linear(duration: 22).repeatForever(autoreverses: false)) {
+            angle = 360
+        }
+    }
+}
+
+struct PlaylistSheet: View {
+    @StateObject private var engine = MusicEngine.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(engine.queue) { s in
+                    Button { engine.play(song: s) } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(s.name).font(.system(size: 14, weight: .semibold))
+                                Text(s.singer).font(.system(size: 11)).foregroundColor(.gray)
+                            }
+                            Spacer()
+                            if engine.currentSong?.id == s.id {
+                                Image(systemName: "waveform").foregroundColor(Color(red: 1, green: 0.37, blue: 0.62))
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("播放队列")
+            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } } }
+        }
     }
 }
