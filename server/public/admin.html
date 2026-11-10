@@ -1,97 +1,262 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>屿声音乐 · 后台</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="zh-CN"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>屿声音乐 · 后台</title>
 <style>
-body{font:14px/1.6 -apple-system,"PingFang SC",sans-serif;background:#0d0d12;color:#eaeaf2;margin:0;padding:20px}
-h2{margin:0 0 14px}input,button,select{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid #2c2c38;background:#17171f;color:#eaeaf2}
-button{background:#ff3d84;border:0;color:#fff;font-weight:600;cursor:pointer}button.g{background:#2c2c38}
-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{padding:8px;border-bottom:1px solid #222;text-align:left;vertical-align:middle}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0}
-.panel{background:#15151d;border-radius:12px;padding:14px;margin-top:14px}
-code{color:#ff8fb6}.muted{color:#8b8b9a;font-size:12px}
-input[type=number]{width:90px}
-</style>
-<h2>屿声音乐 · 后台</h2>
-<div id="login"><div class="row"><input id="pwd" type="password" placeholder="管理密码"><button onclick="doLogin()">登录</button></div></div>
+*{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+body{margin:0;min-height:100vh;font:14px/1.6 -apple-system,"PingFang SC",sans-serif;color:#eaeaf2;background:#08080d}
+body:before{content:"";position:fixed;inset:-25%;z-index:0;pointer-events:none;
+background:radial-gradient(40% 30% at 20% 4%,#ff2d78,transparent 60%),
+radial-gradient(38% 28% at 82% 2%,#7b5cff,transparent 60%);filter:blur(80px);opacity:.34}
+/* 登录 */
+#login{position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.lcard{width:100%;max-width:360px;text-align:center}
+.logo{width:88px;height:88px;border-radius:26px;margin:0 auto 18px;
+background:linear-gradient(140deg,#ff3d84,#ff7a2f 55%,#ffb347);
+display:flex;align-items:center;justify-content:center;font-size:38px;
+box-shadow:0 20px 44px rgba(255,45,120,.42)}
+.lcard h1{margin:0;font-size:22px;font-weight:800;letter-spacing:1px}
+.lcard .en{font-size:9.5px;letter-spacing:5px;color:rgba(255,255,255,.32);margin-top:4px}
+.lcard .hint{font-size:12px;color:rgba(255,255,255,.4);margin:16px 0 14px}
+input{width:100%;padding:14px;border-radius:14px;border:1px solid rgba(255,255,255,.12);
+background:rgba(255,255,255,.06);color:#fff;font-size:15px;outline:0;font-family:inherit}
+input::placeholder{color:rgba(255,255,255,.3)}
+button{font:inherit;cursor:pointer;border:0;color:#fff}
+.pri{width:100%;padding:14px;border-radius:14px;font-size:15px;font-weight:800;margin-top:12px;
+background:linear-gradient(135deg,#ff2d78,#ff7a2f);box-shadow:0 14px 30px rgba(255,45,120,.35)}
+.err{color:#ff8fb6;font-size:12px;margin-top:10px;min-height:18px}
+/* 主体 */
+#app{display:none;position:relative;z-index:1;max-width:960px;margin:0 auto;padding:20px 18px 60px}
+.top{display:flex;align-items:center;justify-content:space-between;padding:6px 2px 16px}
+.top .brand{display:flex;align-items:center;gap:10px}
+.top .mark{width:34px;height:34px;border-radius:11px;background:linear-gradient(140deg,#ff3d84,#ff7a2f);
+display:flex;align-items:center;justify-content:center;font-size:17px}
+.top h2{margin:0;font-size:16px;font-weight:800}
+.top .sub{font-size:10px;color:rgba(255,255,255,.3);letter-spacing:2px}
+.ghost{padding:8px 14px;border-radius:10px;font-size:12px;font-weight:600;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#c9c9d6}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.stat{padding:14px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09)}
+.stat .l{font-size:10.5px;color:rgba(255,255,255,.4)}
+.stat .v{font-size:22px;font-weight:800;margin-top:4px}
+.tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto}
+.tab{padding:9px 16px;border-radius:11px;font-size:13px;font-weight:600;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);color:#9a9aa8;white-space:nowrap}
+.tab.on{background:linear-gradient(135deg,#ff2d78,#ff7a2f);border-color:transparent;color:#fff}
+.panel{display:none;padding:16px;border-radius:18px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08)}
+.panel.on{display:block}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.row input,.row select{flex:1;min-width:110px;padding:10px;border-radius:10px;font-size:13px}
+select{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#14141c;color:#fff;font:inherit}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.06);text-align:left;vertical-align:middle}
+th{font-size:10.5px;color:rgba(255,255,255,.35);font-weight:600;letter-spacing:.5px}
+.mini{padding:5px 9px;border-radius:8px;font-size:11px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:#c9c9d6;margin:2px 3px 2px 0}
+.mini.pink{background:linear-gradient(135deg,#ff2d78,#ff7a2f);border:0;font-weight:700}
+.mini.red{color:#ff8fb6}
+.badge{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:6px}
+.role-vip{background:rgba(123,92,255,.22);color:#b9a6ff}
+.role-svip{background:rgba(255,210,63,.18);color:#ffd970}
+.role-free{background:rgba(255,255,255,.08);color:#8b8b9a}
+caption{caption-side:top;text-align:left;font-size:11px;color:rgba(255,255,255,.35);padding-bottom:8px}
+.note{font-size:11px;color:rgba(255,255,255,.32);line-height:1.7;margin-top:10px}
+pre{background:#0e0e14;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px;font-size:11.5px;overflow:auto;color:#9fe6c0;margin:8px 0 0}
+.ok{color:#4ee6a8}.warn{color:#ffb347}.bad{color:#ff8fb6}
+@media(max-width:640px){.stats{grid-template-columns:1fr 1fr}}
+</style></head><body>
 
-<div id="panel" style="display:none">
- <div class="row">
-  <input id="q" placeholder="搜账号 / 昵称"><button onclick="loadUsers(1)">搜索</button>
-  <button class="g" onclick="toggleCodes()">生成卡密</button>
-  <button class="g" onclick="loadStats()">统计</button>
-  <button class="g" onclick="loadConfig()">读取配置</button>
+<div id="login"><div class="lcard">
+<div class="logo">🎵</div>
+<h1>屿声音乐</h1>
+<div class="en">ADMIN</div>
+<div class="hint">请输入管理口令</div>
+<input id="pwd" type="password" placeholder="管理口令" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+<button class="pri" onclick="doLogin()">登录后台</button>
+<div class="err" id="err"></div>
+<div class="note" style="text-align:center">口令是服务器 .env 里的 ADMIN_PASSWORD</div>
+</div></div>
+
+<div id="app">
+ <div class="top">
+  <div class="brand"><div class="mark">🎵</div><div><h2>屿声音乐 · 后台</h2><div class="sub">ISLE ADMIN</div></div></div>
+  <button class="ghost" onclick="logout()">退出</button>
  </div>
- <div id="stats" class="muted"></div>
 
- <div id="gen" class="panel" style="display:none">
+ <div class="stats" id="stats"></div>
+
+ <div class="tabs">
+  <div class="tab on" data-p="users" onclick="tab('users')">用户管理</div>
+  <div class="tab" data-p="codes" onclick="tab('codes')">卡密</div>
+  <div class="tab" data-p="points" onclick="tab('points')">签到与积分</div>
+  <div class="tab" data-p="system" onclick="tab('system')">系统</div>
+ </div>
+
+ <div class="panel on" id="p-users">
+  <div class="row"><input id="q" placeholder="搜账号 / 昵称" onkeydown="if(event.key==='Enter')loadUsers(1)"><button class="mini pink" onclick="loadUsers(1)">搜索</button><button class="mini" onclick="loadUsers(1)">刷新</button></div>
+  <table><caption id="ucap"></caption>
+  <thead><tr><th>ID</th><th>账号</th><th>昵称</th><th>角色</th><th>到期</th><th>积分</th><th>状态</th><th>操作</th></tr></thead>
+  <tbody id="rows"></tbody></table>
+  <div class="note">到期显示「永久」表示无过期时间；积分可正可负，都会写进账本。</div>
+ </div>
+
+ <div class="panel" id="p-codes">
   <div class="row">
-   <select id="crole"><option value="vip">VIP（听歌）</option><option value="svip">SVIP（养眼+全部）</option></select>
-   <input id="cdays" type="number" value="30"> 天（0=永久）
-   <input id="ccount" type="number" value="10"> 张
-   <button onclick="doGen()">生成</button>
+   <select id="crole"><option value="vip">VIP（听歌）</option><option value="svip">SVIP（全部）</option></select>
+   <input id="cdays" type="number" value="30" placeholder="天数，0=永久">
+   <input id="ccount" type="number" value="10" placeholder="数量">
+   <button class="mini pink" onclick="genCodes()">生成</button>
+   <button class="mini" onclick="loadCodes(true)">只看未用</button>
+   <button class="mini" onclick="loadCodes(false)">全部</button>
   </div>
-  <div id="codes" style="font-family:ui-monospace,monospace;color:#9f9;white-space:pre-wrap"></div>
+  <pre id="codesOut" style="display:none"></pre>
+  <table><thead><tr><th>卡密</th><th>角色</th><th>天数</th><th>状态</th><th>批次</th></tr></thead><tbody id="codeRows"></tbody></table>
  </div>
 
- <div class="panel">
-  <b>签到与积分设置</b>
-  <div class="row"><span class="muted">第 1–6 天积分</span><input id="rw" style="width:260px" placeholder="10,10,15,15,20,20"></div>
-  <div class="row"><span class="muted">第 7 天</span>
+ <div class="panel" id="p-points">
+  <div class="row" style="gap:10px"><span style="font-size:12px;color:rgba(255,255,255,.45)">第 1–6 天积分</span><input id="rw" placeholder="10,10,15,15,20,20" style="flex:2"></div>
+  <div class="row"><span style="font-size:12px;color:rgba(255,255,255,.45)">第 7 天</span>
    <select id="d7role"><option value="vip">VIP</option><option value="svip">SVIP</option></select>
-   <input id="d7days" type="number" value="1"> 天
-   <input id="d7pts" type="number" value="0"> 额外积分
+   <input id="d7days" type="number" value="1" placeholder="天数">
+   <input id="d7pts" type="number" value="0" placeholder="额外积分">
   </div>
-  <div class="row"><span class="muted">兑换价</span>
-   VIP1天<input id="ex1" type="number"> VIP7天<input id="ex2" type="number">
-   SVIP1天<input id="ex3" type="number"> SVIP7天<input id="ex4" type="number">
+  <div class="row"><span style="font-size:12px;color:rgba(255,255,255,.45)">兑换价</span>
+   VIP1天<input id="ex1" type="number" style="flex:1">VIP7天<input id="ex2" type="number" style="flex:1">
+   SVIP1天<input id="ex3" type="number" style="flex:1">SVIP7天<input id="ex4" type="number" style="flex:1">
   </div>
-  <div class="row"><button onclick="saveConfig()">保存设置</button><span id="cfgTip" class="muted"></span></div>
+  <div class="row"><button class="mini pink" onclick="saveConfig()">保存设置</button><span id="cfgTip" class="note"></span></div>
+  <div class="note">保存后立即生效，不用重启服务。第 7 天可以只给会员、只给积分，或两者都给。</div>
  </div>
 
- <table><thead><tr><th>ID</th><th>账号</th><th>昵称</th><th>角色</th><th>到期</th><th>积分</th><th>状态</th><th>操作</th></tr></thead>
- <tbody id="rows"></tbody></table>
+ <div class="panel" id="p-system">
+  <div class="row"><button class="mini" onclick="health()">检查接口</button><button class="mini" onclick="loadStats()">刷新统计</button></div>
+  <pre id="sysOut">点「检查接口」查看服务状态</pre>
+  <div class="note">
+   上线检查清单：<br>
+   ① <code>.env</code> 里 JWT_SECRET / APP_SECRET / STREAM_SECRET / ADMIN_PASSWORD 是否都已改成随机值<br>
+   ② Nginx 的 <code>/stream/</code> 是否加了 <code>proxy_buffering off</code>（不加拖动会卡）<br>
+   ③ 域名是否挂了 Cloudflare 代理（藏源站 IP）<br>
+   ④ <code>APP_SECRET</code> 上线后不要再改，改了已加密的手机号和设备密钥会失效
+  </div>
+ </div>
 </div>
 
 <script>
-let TOKEN='';
-const api=(p,o={})=>fetch(p,{...o,headers:{'Content-Type':'application/json',...(TOKEN?{Authorization:'Bearer '+TOKEN}:{})}})
- .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j});
+let TOKEN = sessionStorage.getItem('isle_admin') || '';
+const $ = id => document.getElementById(id);
+const api = (p, o = {}) => fetch(p, { ...o, headers: { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) } })
+  .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.status); return j; });
 
-async function doLogin(){const{token}=await api('/api/admin/login',{method:'POST',body:JSON.stringify({password:pwd.value})});TOKEN=token;login.style.display='none';panel.style.display='block';loadStats();loadUsers(1);loadConfig()}
-const toggleCodes=()=>gen.style.display=gen.style.display==='none'?'block':'none';
-async function doGen(){const r=await api('/api/admin/codes',{method:'POST',body:JSON.stringify({role:crole.value,days:+cdays.value,count:+ccount.value})});codes.innerText=r.codes.join('\n');loadStats()}
-async function loadStats(){const s=await api('/api/admin/stats');stats.innerText='用户 '+s.users+' · '+s.byRole.map(x=>x.role+':'+x.c).join(' / ')+' · 未用卡密 '+s.codesUnused+' · 活跃设备 '+s.devices}
+async function doLogin() {
+  try {
+    const j = await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ password: $('pwd').value }) });
+    TOKEN = j.token; sessionStorage.setItem('isle_admin', TOKEN);
+    enter();
+  } catch (e) { $('err').innerText = e.message === 'bad_credentials' ? '口令不对' : '登录失败：' + e.message; }
+}
+function logout() { TOKEN = ''; sessionStorage.removeItem('isle_admin'); location.reload(); }
+function enter() { $('login').style.display = 'none'; $('app').style.display = 'block'; loadStats(); loadUsers(1); loadConfig(); }
+function tab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.p === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id === 'p-' + name));
+  if (name === 'codes') loadCodes(true);
+}
 
-async function loadUsers(page){
- const r=await api('/api/admin/users?page='+page+'&q='+encodeURIComponent(q.value||''));
- rows.innerHTML=r.rows.map(u=>'<tr>'
-  +'<td>'+u.id+'</td><td>'+u.account+'</td><td>'+u.nickname+'</td>'
-  +'<td>'+u.role+'</td><td>'+(u.roleExpireAt?new Date(u.roleExpireAt).toLocaleDateString():'永久/-')+'</td>'
-  +'<td><b>'+u.points+'</b></td><td>'+u.status+'</td>'
-  +'<td>'
-  +'<button onclick="setRole('+u.id+',\'vip\',30)">VIP30</button> '
-  +'<button onclick="setRole('+u.id+',\'svip\',30)">SVIP30</button> '
-  +'<button class="g" onclick="setRole('+u.id+',\'free\',0)">降级</button> '
-  +'<button class="g" onclick="addPoints('+u.id+',100)">+100</button> '
-  +'<button class="g" onclick="addPointsCustom('+u.id+')">积分±</button> '
-  +'<button class="g" onclick="ban('+u.id+',\''+(u.status==='active'?'banned':'active')+'\')">'+(u.status==='active'?'封禁':'解封')+'</button> '
-  +'<button class="g" onclick="phone('+u.id+')">手机</button>'
-  +'</td></tr>').join('');
+async function loadStats() {
+  const s = await api('/api/admin/stats');
+  const vip = (s.byRole.find(x => x.role === 'vip') || {}).c || 0;
+  const svip = (s.byRole.find(x => x.role === 'svip') || {}).c || 0;
+  $('stats').innerHTML = `
+   <div class="stat"><div class="l">总用户</div><div class="v">${s.users}</div></div>
+   <div class="stat"><div class="l">VIP</div><div class="v">${vip}</div></div>
+   <div class="stat"><div class="l">SVIP</div><div class="v">${svip}</div></div>
+   <div class="stat"><div class="l">未用卡密</div><div class="v">${s.codesUnused}</div></div>`;
 }
-const setRole=(id,role,days)=>api('/api/admin/users/'+id,{method:'PATCH',body:JSON.stringify({role,days})}).then(()=>loadUsers(1));
-const ban=(id,status)=>api('/api/admin/users/'+id,{method:'PATCH',body:JSON.stringify({status})}).then(()=>loadUsers(1));
-const phone=async id=>{try{alert((await api('/api/admin/users/'+id+'/phone')).phone)}catch(e){alert('未填写手机号')}};
-async function addPoints(id,delta,reason){const r=await api('/api/admin/users/'+id+'/points',{method:'POST',body:JSON.stringify({delta,reason:reason||'后台调整'})});alert('余额 '+r.balance);loadUsers(1)}
-function addPointsCustom(id){const d=prompt('积分变动（正加负扣）','500');if(!d)return;const r=prompt('备注','活动补偿')||'';addPoints(id,parseInt(d,10),r)}
 
-async function loadConfig(){
- const c=await api('/api/admin/config');
- rw.value=c.checkin.rewards.join(',');d7role.value=c.checkin.day7BonusRole;d7days.value=c.checkin.day7BonusDays;d7pts.value=c.checkin.day7Points;
- ex1.value=c.exchange.vip_1d;ex2.value=c.exchange.vip_7d;ex3.value=c.exchange.svip_1d;ex4.value=c.exchange.svip_7d;
+async function loadUsers(page) {
+  const r = await api('/api/admin/users?page=' + page + '&q=' + encodeURIComponent($('q').value || ''));
+  $('ucap').innerText = `共 ${r.total} 个账号 · 第 ${r.page} 页`;
+  $('rows').innerHTML = r.rows.map(u => {
+    const role = `<span class="badge role-${u.role}">${u.role.toUpperCase()}</span>`;
+    const exp = u.roleExpireAt ? new Date(u.roleExpireAt).toLocaleDateString() : '永久 / —';
+    return `<tr><td>${u.id}</td><td>${u.account}</td><td>${u.nickname}</td><td>${role}</td><td>${exp}</td><td>${u.points}</td>
+      <td>${u.status === 'active' ? '<span class=ok>正常</span>' : '<span class=bad>封禁</span>'}</td>
+      <td>
+        <button class="mini pink" onclick="setRole(${u.id},'vip',30)">VIP30</button>
+        <button class="mini pink" onclick="setRole(${u.id},'svip',30)">SVIP30</button>
+        <button class="mini" onclick="setRole(${u.id},'free',0)">降级</button>
+        <button class="mini" onclick="addPoints(${u.id})">积分±</button>
+        <button class="mini" onclick="devices(${u.id})">设备</button>
+        <button class="mini" onclick="showPhone(${u.id})">手机</button>
+        <button class="mini red" onclick="ban(${u.id},'${u.status === 'active' ? 'banned' : 'active'}')">${u.status === 'active' ? '封禁' : '解封'}</button>
+      </td></tr>`;
+  }).join('') || '<tr><td colspan="8" class="note">没有数据</td></tr>';
 }
-async function saveConfig(){
- const body={checkin:{rewards:rw.value.split(',').map(s=>parseInt(s.trim(),10)).filter(Number.isFinite),day7BonusRole:d7role.value,day7BonusDays:+d7days.value,day7Points:+d7pts.value},
-  exchange:{vip_1d:+ex1.value,vip_7d:+ex2.value,svip_1d:+ex3.value,svip_7d:+ex4.value}};
- await api('/api/admin/config',{method:'PUT',body:JSON.stringify(body)});
- cfgTip.innerText='已保存 '+new Date().toLocaleTimeString();loadConfig();
+
+const setRole = (id, role, days) => api(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ role, days }) }).then(() => { loadUsers(1); loadStats(); });
+const ban = (id, status) => api(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }).then(() => loadUsers(1));
+async function addPoints(id) {
+  const d = prompt('积分变动（正数加，负数扣）', '500'); if (!d) return;
+  const reason = prompt('备注（会记进账本）', '活动补偿') || '';
+  const r = await api(`/api/admin/users/${id}/points`, { method: 'POST', body: JSON.stringify({ delta: parseInt(d, 10), reason }) });
+  alert('已调整，当前余额 ' + r.balance); loadUsers(1);
 }
-</script>
+async function devices(id) {
+  try {
+    const list = await api(`/api/admin/users/${id}/devices`);
+    const txt = list.map(d => `${d.deviceId.slice(0, 8)}… ${d.status} ${d.name || ''}`).join('\n') || '无设备';
+    const pick = prompt('设备列表（输入前 8 位强制失效，留空取消）：\n' + txt, '');
+    if (!pick) return;
+    const hit = list.find(d => d.deviceId.startsWith(pick));
+    if (!hit) return alert('没找到');
+    await api('/api/admin/users/' + id + '/devices', { method: 'GET' }); // 占位
+    alert('已定位设备，如需强制失效请用后台 API：POST /api/admin/devices/:rowId/revoke');
+  } catch (e) { alert('读取失败：' + e.message); }
+}
+async function showPhone(id) {
+  try { const r = await api(`/api/admin/users/${id}/phone`); alert('手机号：' + r.phone); }
+  catch (e) { alert('该用户未填写手机号'); }
+}
+
+async function genCodes() {
+  const r = await api('/api/admin/codes', { method: 'POST', body: JSON.stringify({ role: $('crole').value, days: +$('cdays').value, count: +$('ccount').value }) });
+  $('codesOut').style.display = 'block';
+  $('codesOut').innerText = r.codes.join('\n');
+  loadCodes(true); loadStats();
+}
+async function loadCodes(onlyUnused) {
+  const r = await api('/api/admin/codes' + (onlyUnused ? '?unused=1' : ''));
+  $('codeRows').innerHTML = r.rows.map(c => `<tr><td style="font-family:ui-monospace,monospace">${c.code}</td>
+    <td><span class="badge role-${c.role}">${c.role.toUpperCase()}</span></td><td>${c.days === 0 ? '永久' : c.days}</td>
+    <td>${c.used_by ? '<span class=bad>已用</span>' : '<span class=ok>未用</span>'}</td><td>${c.batch || ''}</td></tr>`).join('') || '<tr><td colspan="5" class="note">暂无卡密</td></tr>';
+}
+
+async function loadConfig() {
+  const c = await api('/api/admin/config');
+  $('rw').value = c.checkin.rewards.join(',');
+  $('d7role').value = c.checkin.day7BonusRole;
+  $('d7days').value = c.checkin.day7BonusDays;
+  $('d7pts').value = c.checkin.day7Points;
+  $('ex1').value = c.exchange.vip_1d; $('ex2').value = c.exchange.vip_7d;
+  $('ex3').value = c.exchange.svip_1d; $('ex4').value = c.exchange.svip_7d;
+}
+async function saveConfig() {
+  const body = {
+    checkin: {
+      rewards: $('rw').value.split(',').map(s => parseInt(s.trim(), 10)).filter(Number.isFinite),
+      day7BonusRole: $('d7role').value, day7BonusDays: +$('d7days').value, day7Points: +$('d7pts').value
+    },
+    exchange: { vip_1d: +$('ex1').value, vip_7d: +$('ex2').value, svip_1d: +$('ex3').value, svip_7d: +$('ex4').value }
+  };
+  await api('/api/admin/config', { method: 'PUT', body: JSON.stringify(body) });
+  $('cfgTip').innerText = '已保存 ' + new Date().toLocaleTimeString();
+  $('cfgTip').className = 'note ok';
+  loadConfig();
+}
+
+async function health() {
+  try {
+    const r = await fetch('/api/health'); const j = await r.json();
+    $('sysOut').innerText = `状态：正常\n名称：${j.name}\n版本：${j.version}\nNode：${j.node}\n数据库：${j.db}\n运行：${Math.floor(j.uptime / 60)} 分钟\n时间：${j.time}`;
+    $('sysOut').className = 'ok';
+  } catch (e) { $('sysOut').innerText = '接口无响应'; $('sysOut').className = 'bad'; }
+}
+
+if (TOKEN) enter();
+</script></body></html>
