@@ -51,6 +51,7 @@ struct PaywallView: View {
     }
 }
 
+/// 我的：极简四块（会员卡 → 快捷三键 → 四宫格 → 设置）
 struct MineView: View {
     @EnvironmentObject var auth: AuthStore
     @State private var showRedeem = false
@@ -59,69 +60,21 @@ struct MineView: View {
     var body: some View {
         NavigationView {
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
+                VStack(spacing: 12) {
                     vipCard
-                    quickGrid
-                    sectionTitle("我的歌单")
-                    NavigationLink(destination: LibraryView()) {
-                        entry(icon: "music.note.list", color: Color(red: 1, green: 0.18, blue: 0.47),
-                              title: "收藏与歌单", sub: "收藏歌曲 · 自建歌单")
-                    }
-                    sectionTitle("会员")
-                    Button { showRedeem = true } label: {
-                        entry(icon: "ticket", color: Color(red: 1, green: 0.62, blue: 0.25),
-                              title: "卡密兑换", sub: "输入卡密开通 VIP / SVIP")
-                    }
-                    NavigationLink(destination: CheckinView()) {
-                        entry(icon: "calendar", color: Color(red: 0.48, green: 0.36, blue: 1),
-                              title: "签到与积分", sub: "连签拿积分，积分换会员")
-                    }
-                    NavigationLink(destination: InviteView()) {
-                        entry(icon: "person.2", color: Color(red: 0, green: 0.88, blue: 0.64),
-                              title: "邀请好友", sub: "双方各得 7 天 VIP")
-                    }
-                    sectionTitle("内容与设置")
-                    NavigationLink(destination: SearchView()) {
-                        entry(icon: "magnifyingglass", color: Color(red: 1, green: 0.37, blue: 0.62),
-                              title: "搜索", sub: "全网歌曲")
-                    }
-                    NavigationLink(destination: SourcesView(kind: "music")) {
-                        entry(icon: "waveform", color: Color(red: 1, green: 0.48, blue: 0.18),
-                              title: "音乐音源", sub: "后台配置的源")
-                    }
-                    NavigationLink(destination: SourcesView(kind: "video")) {
-                        entry(icon: "play.rectangle", color: Color(red: 0, green: 0.64, blue: 1),
-                              title: "视频源", sub: "养眼用")
-                    }
-                    NavigationLink(destination: CloudSyncView()) {
-                        entry(icon: "icloud", color: Color(red: 0.4, green: 0.6, blue: 1),
-                              title: "云同步", sub: "歌单与进度")
-                    }
-                    NavigationLink(destination: LyricsView()) {
-                        entry(icon: "text.quote", color: Color(red: 0.7, green: 0.5, blue: 1),
-                              title: "全屏歌词", sub: "居中、点行跳转")
-                    }
-                    NavigationLink(destination: SettingsView()) {
-                        entry(icon: "gearshape", color: .gray,
-                              title: "设置", sub: "外观 / 精确跳转 / 缓存")
-                    }
-                    NavigationLink(destination: DeviceManageView()) {
-                        entry(icon: "iphone", color: Color(red: 0.48, green: 0.36, blue: 1),
-                              title: "设备管理", sub: "绑定与解绑")
-                    }
-
+                    quickThree
+                    gridFour
+                    settingsRow
                     Button { auth.logout() } label: {
                         Text("退出登录").font(.system(size: 13, weight: .semibold))
                             .foregroundColor(Color(red: 1, green: 0.35, blue: 0.55))
                             .frame(maxWidth: .infinity).padding(.vertical, 12)
                     }
-                    .padding(.top, 4)
-
                     Text("屿声音乐 \(Config.version)")
                         .font(.system(size: 10)).foregroundColor(.white.opacity(0.2))
                         .padding(.bottom, 20)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 16).padding(.top, 12)
             }
             .background(Color.black.ignoresSafeArea())
             .navigationBarHidden(true)
@@ -145,82 +98,126 @@ struct MineView: View {
         }
     }
 
+    // 1) 会员卡
     private var vipCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(LinearGradient(colors: [Color(red: 1, green: 0.62, blue: 0.25),
-                                                  Color(red: 1, green: 0.37, blue: 0.62)],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 52, height: 52)
-                    .overlay(Text(String((auth.user?.nickname ?? "I").prefix(1)))
-                                .font(.system(size: 20, weight: .bold)).foregroundColor(.white))
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(auth.user?.nickname ?? "-").font(.system(size: 17, weight: .heavy))
-                        Text((auth.user?.role ?? "free").uppercased())
-                            .font(.system(size: 9, weight: .black))
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Color(red: 0.14, green: 0.06, blue: 0))
-                            .foregroundColor(Color(red: 1, green: 0.84, blue: 0.43))
-                            .clipShape(RoundedRectangle(cornerRadius: 5))
-                    }
-                    Text("账号 \(auth.user?.account ?? "-") · 积分 \(auth.user?.points ?? 0)")
-                        .font(.system(size: 11)).foregroundColor(.white.opacity(0.6))
+        HStack(spacing: 12) {
+            Circle()
+                .fill(LinearGradient(colors: [Color(red: 1, green: 0.62, blue: 0.25),
+                                              Color(red: 1, green: 0.37, blue: 0.62)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 52, height: 52)
+                .overlay(Text(String((auth.user?.nickname ?? "I").prefix(1)))
+                            .font(.system(size: 20, weight: .bold)).foregroundColor(.white))
+                .overlay(Circle().stroke(Color(red: 1, green: 0.82, blue: 0.25).opacity(0.55), lineWidth: 1.5))
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(auth.user?.nickname ?? "-").font(.system(size: 17, weight: .heavy))
+                    Text((auth.user?.role ?? "free").uppercased())
+                        .font(.system(size: 9, weight: .black))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color(red: 0.14, green: 0.06, blue: 0))
+                        .foregroundColor(Color(red: 1, green: 0.84, blue: 0.43))
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
                 }
-                Spacer()
+                Text("账号 \(auth.user?.account ?? "-")　积分 \(auth.user?.points ?? 0)")
+                    .font(.system(size: 11)).foregroundColor(.white.opacity(0.6))
+            }
+            Spacer()
+            NavigationLink(destination: SettingsView()) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 17)).foregroundColor(.white.opacity(0.75))
+                    .padding(8).background(Color.white.opacity(0.08))
+                    .clipShape(Circle())
             }
         }
         .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 20)
             .fill(LinearGradient(colors: [Color(red: 0.15, green: 0.12, blue: 0.10),
                                           Color(red: 0.07, green: 0.06, blue: 0.09)],
                                  startPoint: .topLeading, endPoint: .bottomTrailing)))
         .overlay(RoundedRectangle(cornerRadius: 20)
             .stroke(Color(red: 1, green: 0.82, blue: 0.25).opacity(0.35), lineWidth: 1))
-        .padding(.top, 12)
     }
 
-    private var quickGrid: some View {
+    // 2) 三键：卡密 / 签到 / 邀请
+    private var quickThree: some View {
         HStack(spacing: 9) {
-            quick(icon: "heart", tint: Color(red: 1, green: 0.37, blue: 0.62), title: "收藏", value: "0")
-            quick(icon: "music.note.list", tint: Color(red: 0.48, green: 0.36, blue: 1), title: "歌单", value: "3")
-            quick(icon: "arrow.down.circle", tint: Color(red: 0, green: 0.88, blue: 0.64), title: "已缓存", value: "0")
-            quick(icon: "iphone", tint: Color(red: 1, green: 0.62, blue: 0.25), title: "设备", value: "—")
+            Button { showRedeem = true } label: {
+                pill(icon: "ticket", text: "卡密", tint: Color(red: 1, green: 0.62, blue: 0.25))
+            }
+            NavigationLink(destination: CheckinView()) {
+                pill(icon: "calendar", text: "签到", tint: Color(red: 0.48, green: 0.36, blue: 1))
+            }
+            NavigationLink(destination: InviteView()) {
+                pill(icon: "person.2", text: "邀请", tint: Color(red: 0, green: 0.88, blue: 0.64))
+            }
         }
     }
 
-    private func quick(icon: String, tint: Color, title: String, value: String) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon).font(.system(size: 15)).foregroundColor(tint)
-            Text(value).font(.system(size: 15, weight: .bold))
-            Text(title).font(.system(size: 10)).foregroundColor(.secondary)
+    private func pill(icon: String, text: String, tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 12))
+            Text(text).font(.system(size: 13, weight: .semibold))
         }
+        .foregroundColor(tint)
         .frame(maxWidth: .infinity).padding(.vertical, 12)
         .background(Color.white.opacity(0.05))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08), lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
-    private func sectionTitle(_ t: String) -> some View {
-        Text(t).font(.system(size: 13, weight: .bold)).foregroundColor(.white.opacity(0.6))
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
-    }
-
-    private func entry(icon: String, color: Color, title: String, sub: String) -> some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(color.opacity(0.28)).frame(width: 34, height: 34)
-                .overlay(Image(systemName: icon).font(.system(size: 15)).foregroundColor(color))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 14, weight: .semibold)).foregroundColor(.primary)
-                Text(sub).font(.system(size: 10.5)).foregroundColor(.secondary)
+    // 3) 四宫格：收藏 / 歌单 / 云同步 / 设备
+    private var gridFour: some View {
+        HStack(spacing: 9) {
+            NavigationLink(destination: LibraryView()) {
+                tile(icon: "heart.fill", text: "收藏\n与歌单", tint: Color(red: 1, green: 0.37, blue: 0.62))
             }
-            Spacer()
-            Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(.secondary)
+            NavigationLink(destination: CloudSyncView()) {
+                tile(icon: "icloud.fill", text: "云\n同步", tint: Color(red: 0.4, green: 0.6, blue: 1))
+            }
+            NavigationLink(destination: LyricsView()) {
+                tile(icon: "text.quote", text: "全屏\n歌词", tint: Color(red: 0.7, green: 0.5, blue: 1))
+            }
+            NavigationLink(destination: DeviceManageView()) {
+                tile(icon: "iphone", text: "设备\n管理", tint: Color(red: 0.48, green: 0.36, blue: 1))
+            }
         }
-        .padding(.vertical, 9).padding(.horizontal, 12)
+    }
+
+    private func tile(icon: String, text: String, tint: Color) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 17)).foregroundColor(tint)
+            Text(text)
+                .font(.system(size: 10.5, weight: .semibold))
+                .multilineTextAlignment(.center)
+                .foregroundColor(.white.opacity(0.8))
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 14)
         .background(Color.white.opacity(0.05))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08), lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    // 4) 设置入口
+    private var settingsRow: some View {
+        NavigationLink(destination: SettingsView()) {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(0.10)).frame(width: 34, height: 34)
+                    .overlay(Image(systemName: "gearshape.fill")
+                                .font(.system(size: 15)).foregroundColor(.white.opacity(0.7)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("设置").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+                    Text("音源 · 视频源 · 精确跳转 · 外观 · 关于")
+                        .font(.system(size: 10.5)).foregroundColor(.white.opacity(0.4))
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(.white.opacity(0.3))
+            }
+            .padding(.vertical, 9).padding(.horizontal, 12)
+            .background(Color.white.opacity(0.05))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
     }
 }
