@@ -1,30 +1,36 @@
 import SwiftUI
 import AVFoundation
 
-/// 养眼：纯全屏，上下滑切换，无图标
+/// 养眼：全屏占满，不滑动，单条循环播放
 struct EyesView: View {
     @EnvironmentObject var auth: AuthStore
     @State private var sources: [SourceItem] = []
-    @State private var index = 0
     @State private var loading = true
-    @State private var player: AVPlayer?
+    @State private var queuePlayer: AVQueuePlayer?
+    @State private var looper: AVPlayerLooper?
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-
             if loading {
                 ProgressView().tint(.white)
             } else if sources.isEmpty {
                 emptyState
+            } else if let qp = queuePlayer {
+                VideoSurface(player: qp)
+                    .ignoresSafeArea()
             } else {
-                videoLayer
+                notDirectLink
             }
         }
         .task { await load() }
+        .onDisappear {
+            queuePlayer?.pause()
+            looper = nil
+            queuePlayer = nil
+        }
     }
 
-    // MARK: 空状态
     private var emptyState: some View {
         ZStack {
             RadialGradient(colors: [Color(red: 1, green: 0.37, blue: 0.62).opacity(0.35), .clear],
@@ -40,7 +46,7 @@ struct EyesView: View {
                     .fill(LinearGradient(colors: [.clear, Color(red: 1, green: 0.37, blue: 0.62), .clear],
                                          startPoint: .leading, endPoint: .trailing))
                     .frame(width: 34, height: 2).padding(.vertical, 8)
-                NavigationLink(destination: SourcesView(kind: "video")) {
+                NavigationLink(destination: VideoSourceSettingsView()) {
                     Text("去设置")
                         .font(.system(size: 13, weight: .semibold))
                         .padding(.horizontal, 22).padding(.vertical, 11)
@@ -49,84 +55,62 @@ struct EyesView: View {
                         .clipShape(Capsule())
                         .foregroundColor(.white)
                 }
-                Text("我的 → 视频源 → 添加").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.3)).padding(.top, 6)
+                Text("我的 → 设置 → 视频源").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.3)).padding(.top, 6)
             }
         }
         .wrapInNavigation()
     }
 
-    // MARK: 播放层
-    private var videoLayer: some View {
-        ZStack {
-            if let player = player {
-                VideoSurface(player: player).ignoresSafeArea()
-            } else {
-                // 源不是直链视频时的占位
-                VStack(spacing: 8) {
-                    Image(systemName: "film").font(.system(size: 34)).foregroundColor(.white.opacity(0.4))
-                    Text(sources[min(index, sources.count - 1)].name)
-                        .font(.system(size: 13, weight: .semibold)).foregroundColor(.white.opacity(0.8))
-                    Text("该源不是直链视频").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.35))
-                }
-            }
-
-            // 页码提示（极淡）
-            VStack {
-                Spacer()
-                Text("\(index + 1) / \(sources.count)　上滑下一个")
-                    .font(.system(size: 10)).tracking(1)
-                    .foregroundColor(.white.opacity(0.35))
-                    .padding(.bottom, 24)
-            }
+    private var notDirectLink: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "film").font(.system(size: 34)).foregroundColor(.white.opacity(0.4))
+            Text(sources.first?.name ?? "视频源").font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.8))
+            Text("该源不是直链视频").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.35))
         }
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 30)
-                .onEnded { v in
-                    if v.translation.height < -60 { next() }
-                    else if v.translation.height > 60 { prev() }
-                }
-        )
-        .onTapGesture { toggle() }
     }
 
-    // MARK: 逻辑
     private func load() async {
         loading = true
         sources = (try? await APIClient.shared.sources(kind: "video")) ?? []
         loading = false
-        if !sources.isEmpty { prepare(0) }
+        prepare()
     }
 
-    private func prepare(_ i: Int) {
-        guard !sources.isEmpty else { return }
-        index = max(0, min(i, sources.count - 1))
-        guard let url = URL(string: sources[index].url),
-              let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme) else {
-            player = nil; return
+    /// 单条循环：AVQueuePlayer + AVPlayerLooper，无滑动、无缝续播
+    private func prepare() {
+        guard let first = sources.first,
+              let url = URL(string: first.url),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme) else {
+            queuePlayer = nil
+            return
         }
-        let p = AVPlayer(url: url)
-        player = p
-        p.play()
+        let item = AVPlayerItem(url: url)
+        item.preferredForwardBufferDuration = 3
+        let qp = AVQueuePlayer()
+        qp.automaticallyWaitsToMinimizeStalling = false
+        qp.actionAtItemEnd = .advance
+        looper = AVPlayerLooper(player: qp, templateItem: item)
+        queuePlayer = qp
+        qp.play()
     }
-
-    private func next() { prepare(index + 1) }
-    private func prev() { prepare(index - 1) }
-    private func toggle() { player?.timeControlStatus == .playing ? player?.pause() : player?.play() }
 }
 
-/// AVPlayerLayer 包装
+/// AVPlayerLayer 包装（铺满，不拉伸变形）
 struct VideoSurface: UIViewRepresentable {
     let player: AVPlayer
 
     func makeUIView(context: Context) -> PlayerContainerView {
         let v = PlayerContainerView()
         v.backgroundColor = .black
-        v.playerLayer.videoGravity = .resizeAspect
+        v.playerLayer.videoGravity = .resizeAspectFill
         v.playerLayer.player = player
         return v
     }
+
     func updateUIView(_ uiView: PlayerContainerView, context: Context) {
+        uiView.playerLayer.videoGravity = .resizeAspectFill
         uiView.playerLayer.player = player
     }
 }
@@ -137,7 +121,6 @@ final class PlayerContainerView: UIView {
 }
 
 extension View {
-    /// 给空状态包一层 NavigationView，保证 NavigationLink 能用
     func wrapInNavigation() -> some View {
         NavigationView { self }.navigationViewStyle(StackNavigationViewStyle())
     }
