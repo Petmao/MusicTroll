@@ -7,6 +7,7 @@ final class MineRouter: ObservableObject {
     @Published var fav = false
     @Published var cloud = false
     @Published var device = false
+    @Published var importing = false
 }
 
 struct MineTheme {
@@ -75,6 +76,7 @@ struct MineView: View {
     @EnvironmentObject var auth: AuthStore
     @StateObject private var r = MineRouter()
     @State private var recent: [String] = ["夜航星", "坠落星空（女版）", "慢冷", "晚风"]
+    @State private var importSource: MusicPlatform?
 
     var body: some View {
         NavigationView {
@@ -86,6 +88,8 @@ struct MineView: View {
                             MineMemberCard(nickname: auth.user?.nickname ?? "未登录") { r.settings = true }
                             MineQuickRow(checkin: $r.checkin, invite: $r.invite, fav: $r.fav)
                                 .padding(.top, 10)
+                            MineImportRow { platform in importSource = platform }
+                                .padding(.top, 12)
                             MineRecentRow(names: recent) { recent = [] }
                                 .padding(.top, 12)
                             MineGrid(fav: $r.fav, cloud: $r.cloud, device: $r.device, settings: $r.settings)
@@ -103,6 +107,9 @@ struct MineView: View {
             }
             .navigationBarHidden(true)
             .background(links)
+            .sheet(item: $importSource) { p in
+                PlaylistImportView(platform: p)
+            }
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }
@@ -120,6 +127,198 @@ struct MineView: View {
     }
 }
 
+// MARK: - 歌单导入
+enum MusicPlatform: String, Identifiable, CaseIterable {
+    case netease, qq, kugou, kuwo
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .netease: return "网易云"
+        case .qq: return "QQ 音乐"
+        case .kugou: return "酷狗"
+        case .kuwo: return "酷我"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .netease: return "cloud.fill"
+        case .qq: return "music.note.list"
+        case .kugou: return "waveform.circle.fill"
+        case .kuwo: return "dot.radiowaves.left.and.right"
+        }
+    }
+
+    var c1: Color {
+        switch self {
+        case .netease: return Color(red: 0.90, green: 0.16, blue: 0.20)
+        case .qq: return Color(red: 0.19, green: 0.72, blue: 0.35)
+        case .kugou: return Color(red: 0.13, green: 0.55, blue: 1.00)
+        case .kuwo: return Color(red: 1.00, green: 0.62, blue: 0.10)
+        }
+    }
+
+    var c2: Color {
+        switch self {
+        case .netease: return Color(red: 1.00, green: 0.45, blue: 0.30)
+        case .qq: return Color(red: 0.12, green: 0.52, blue: 0.95)
+        case .kugou: return Color(red: 0.36, green: 0.85, blue: 1.00)
+        case .kuwo: return Color(red: 1.00, green: 0.35, blue: 0.35)
+        }
+    }
+}
+
+struct MineImportRow: View {
+    let onPick: (MusicPlatform) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text("导入歌单").font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white.opacity(0.62))
+                Spacer()
+                Text("粘贴链接即可").font(.system(size: 10)).foregroundColor(.white.opacity(0.3))
+            }
+            HStack(spacing: 8) {
+                ForEach(MusicPlatform.allCases) { p in
+                    Button { onPick(p) } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: p.icon)
+                                .font(.system(size: 15))
+                                .foregroundColor(.white)
+                            Text(p.title)
+                                .font(.system(size: 9.5, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.92))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(RoundedRectangle(cornerRadius: 14)
+                            .fill(LinearGradient(colors: [p.c1, p.c2],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing)))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 导入弹窗
+struct PlaylistImportView: View {
+    let platform: MusicPlatform
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var store = PlaylistStore.shared
+    @State private var link = ""
+    @State private var loading = false
+    @State private var message: String?
+    @State private var ok = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                MineTheme.bg.ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Image(systemName: platform.icon).font(.system(size: 15))
+                            .foregroundColor(.white)
+                            .frame(width: 34, height: 34)
+                            .background(RoundedRectangle(cornerRadius: 10)
+                                .fill(LinearGradient(colors: [platform.c1, platform.c2],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing)))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("导入 \(platform.title) 歌单").font(.system(size: 14, weight: .bold))
+                            Text("粘贴歌单分享链接或 ID").font(.system(size: 10.5)).foregroundColor(.gray)
+                        }
+                        Spacer()
+                    }
+
+                    TextField("https://… 或歌单 ID", text: $link)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .padding(12)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                        .font(.system(size: 12))
+
+                    Button {
+                        Task { await runImport() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            if loading { ProgressView().scaleEffect(0.7) }
+                            Text(loading ? "解析中…" : "开始导入")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                        .background(RoundedRectangle(cornerRadius: 13)
+                            .fill(LinearGradient(colors: [platform.c1, platform.c2],
+                                                 startPoint: .leading, endPoint: .trailing)))
+                    }
+                    .disabled(loading)
+
+                    if let message {
+                        HStack(alignment: .top, spacing: 7) {
+                            Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                .font(.system(size: 12))
+                            Text(message).font(.system(size: 11))
+                            Spacer()
+                        }
+                        .foregroundColor(ok ? Color(red: 0.30, green: 0.90, blue: 0.66)
+                                            : Color(red: 1, green: 0.62, blue: 0.35))
+                        .padding(11)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.05)))
+                    }
+
+                    Text("导入后歌单会出现在「我的 → 收藏与歌单 → 歌单」，可继续用本 App 播放。")
+                        .font(.system(size: 9.5)).foregroundColor(.white.opacity(0.3))
+                    Text("说明：跨平台歌单解析需要服务端 /api/import/playlist 接口；未开通时只会建一个占位歌单。")
+                        .font(.system(size: 9)).foregroundColor(.white.opacity(0.22))
+                    Spacer()
+                }
+                .padding(16)
+            }
+            .navigationTitle("导入歌单")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } } }
+        }
+    }
+
+    private func runImport() async {
+        let id = Self.extractID(link)
+        guard !id.isEmpty else { message = "链接里没找到歌单 ID"; ok = false; return }
+        loading = true
+        defer { loading = false }
+
+        // 尝试服务端解析（存在就真导入）
+        if let rows = try? await APIClient.shared.importPlaylist(source: platform.rawValue, id: id),
+           !rows.isEmpty {
+            store.lists.append(IslePlaylist(name: "\(platform.title)导入 \(rows.count) 首", songs: rows))
+            ok = true
+            message = "成功导入 \(rows.count) 首"
+            return
+        }
+
+        // 服务端没接口：建占位歌单，提示手动补歌
+        store.add("\(platform.title)歌单 \(id.suffix(6))")
+        ok = false
+        message = "已创建歌单（\(id)），但服务端未开通解析接口，曲目为空"
+    }
+
+    static func extractID(_ s: String) -> String {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.contains("id=") {
+            return t.components(separatedBy: "id=").last?
+                .components(separatedBy: "&").first ?? ""
+        }
+        if t.contains("playlist/") {
+            return t.components(separatedBy: "playlist/").last?
+                .components(separatedBy: "?").first ?? ""
+        }
+        return t.allSatisfy { $0.isLetter || $0.isNumber } ? t : ""
+    }
+}
+
+// MARK: - 会员卡
 struct MineMemberCard: View {
     let nickname: String
     let onSettings: () -> Void
@@ -231,7 +430,6 @@ struct MinePill: View {
 struct MineRecentRow: View {
     let names: [String]
     let onClear: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
