@@ -1,0 +1,97 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>屿声音乐 · 后台</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font:14px/1.6 -apple-system,"PingFang SC",sans-serif;background:#0d0d12;color:#eaeaf2;margin:0;padding:20px}
+h2{margin:0 0 14px}input,button,select{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid #2c2c38;background:#17171f;color:#eaeaf2}
+button{background:#ff3d84;border:0;color:#fff;font-weight:600;cursor:pointer}button.g{background:#2c2c38}
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{padding:8px;border-bottom:1px solid #222;text-align:left;vertical-align:middle}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.panel{background:#15151d;border-radius:12px;padding:14px;margin-top:14px}
+code{color:#ff8fb6}.muted{color:#8b8b9a;font-size:12px}
+input[type=number]{width:90px}
+</style>
+<h2>屿声音乐 · 后台</h2>
+<div id="login"><div class="row"><input id="pwd" type="password" placeholder="管理密码"><button onclick="doLogin()">登录</button></div></div>
+
+<div id="panel" style="display:none">
+ <div class="row">
+  <input id="q" placeholder="搜账号 / 昵称"><button onclick="loadUsers(1)">搜索</button>
+  <button class="g" onclick="toggleCodes()">生成卡密</button>
+  <button class="g" onclick="loadStats()">统计</button>
+  <button class="g" onclick="loadConfig()">读取配置</button>
+ </div>
+ <div id="stats" class="muted"></div>
+
+ <div id="gen" class="panel" style="display:none">
+  <div class="row">
+   <select id="crole"><option value="vip">VIP（听歌）</option><option value="svip">SVIP（养眼+全部）</option></select>
+   <input id="cdays" type="number" value="30"> 天（0=永久）
+   <input id="ccount" type="number" value="10"> 张
+   <button onclick="doGen()">生成</button>
+  </div>
+  <div id="codes" style="font-family:ui-monospace,monospace;color:#9f9;white-space:pre-wrap"></div>
+ </div>
+
+ <div class="panel">
+  <b>签到与积分设置</b>
+  <div class="row"><span class="muted">第 1–6 天积分</span><input id="rw" style="width:260px" placeholder="10,10,15,15,20,20"></div>
+  <div class="row"><span class="muted">第 7 天</span>
+   <select id="d7role"><option value="vip">VIP</option><option value="svip">SVIP</option></select>
+   <input id="d7days" type="number" value="1"> 天
+   <input id="d7pts" type="number" value="0"> 额外积分
+  </div>
+  <div class="row"><span class="muted">兑换价</span>
+   VIP1天<input id="ex1" type="number"> VIP7天<input id="ex2" type="number">
+   SVIP1天<input id="ex3" type="number"> SVIP7天<input id="ex4" type="number">
+  </div>
+  <div class="row"><button onclick="saveConfig()">保存设置</button><span id="cfgTip" class="muted"></span></div>
+ </div>
+
+ <table><thead><tr><th>ID</th><th>账号</th><th>昵称</th><th>角色</th><th>到期</th><th>积分</th><th>状态</th><th>操作</th></tr></thead>
+ <tbody id="rows"></tbody></table>
+</div>
+
+<script>
+let TOKEN='';
+const api=(p,o={})=>fetch(p,{...o,headers:{'Content-Type':'application/json',...(TOKEN?{Authorization:'Bearer '+TOKEN}:{})}})
+ .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j});
+
+async function doLogin(){const{token}=await api('/api/admin/login',{method:'POST',body:JSON.stringify({password:pwd.value})});TOKEN=token;login.style.display='none';panel.style.display='block';loadStats();loadUsers(1);loadConfig()}
+const toggleCodes=()=>gen.style.display=gen.style.display==='none'?'block':'none';
+async function doGen(){const r=await api('/api/admin/codes',{method:'POST',body:JSON.stringify({role:crole.value,days:+cdays.value,count:+ccount.value})});codes.innerText=r.codes.join('\n');loadStats()}
+async function loadStats(){const s=await api('/api/admin/stats');stats.innerText='用户 '+s.users+' · '+s.byRole.map(x=>x.role+':'+x.c).join(' / ')+' · 未用卡密 '+s.codesUnused+' · 活跃设备 '+s.devices}
+
+async function loadUsers(page){
+ const r=await api('/api/admin/users?page='+page+'&q='+encodeURIComponent(q.value||''));
+ rows.innerHTML=r.rows.map(u=>'<tr>'
+  +'<td>'+u.id+'</td><td>'+u.account+'</td><td>'+u.nickname+'</td>'
+  +'<td>'+u.role+'</td><td>'+(u.roleExpireAt?new Date(u.roleExpireAt).toLocaleDateString():'永久/-')+'</td>'
+  +'<td><b>'+u.points+'</b></td><td>'+u.status+'</td>'
+  +'<td>'
+  +'<button onclick="setRole('+u.id+',\'vip\',30)">VIP30</button> '
+  +'<button onclick="setRole('+u.id+',\'svip\',30)">SVIP30</button> '
+  +'<button class="g" onclick="setRole('+u.id+',\'free\',0)">降级</button> '
+  +'<button class="g" onclick="addPoints('+u.id+',100)">+100</button> '
+  +'<button class="g" onclick="addPointsCustom('+u.id+')">积分±</button> '
+  +'<button class="g" onclick="ban('+u.id+',\''+(u.status==='active'?'banned':'active')+'\')">'+(u.status==='active'?'封禁':'解封')+'</button> '
+  +'<button class="g" onclick="phone('+u.id+')">手机</button>'
+  +'</td></tr>').join('');
+}
+const setRole=(id,role,days)=>api('/api/admin/users/'+id,{method:'PATCH',body:JSON.stringify({role,days})}).then(()=>loadUsers(1));
+const ban=(id,status)=>api('/api/admin/users/'+id,{method:'PATCH',body:JSON.stringify({status})}).then(()=>loadUsers(1));
+const phone=async id=>{try{alert((await api('/api/admin/users/'+id+'/phone')).phone)}catch(e){alert('未填写手机号')}};
+async function addPoints(id,delta,reason){const r=await api('/api/admin/users/'+id+'/points',{method:'POST',body:JSON.stringify({delta,reason:reason||'后台调整'})});alert('余额 '+r.balance);loadUsers(1)}
+function addPointsCustom(id){const d=prompt('积分变动（正加负扣）','500');if(!d)return;const r=prompt('备注','活动补偿')||'';addPoints(id,parseInt(d,10),r)}
+
+async function loadConfig(){
+ const c=await api('/api/admin/config');
+ rw.value=c.checkin.rewards.join(',');d7role.value=c.checkin.day7BonusRole;d7days.value=c.checkin.day7BonusDays;d7pts.value=c.checkin.day7Points;
+ ex1.value=c.exchange.vip_1d;ex2.value=c.exchange.vip_7d;ex3.value=c.exchange.svip_1d;ex4.value=c.exchange.svip_7d;
+}
+async function saveConfig(){
+ const body={checkin:{rewards:rw.value.split(',').map(s=>parseInt(s.trim(),10)).filter(Number.isFinite),day7BonusRole:d7role.value,day7BonusDays:+d7days.value,day7Points:+d7pts.value},
+  exchange:{vip_1d:+ex1.value,vip_7d:+ex2.value,svip_1d:+ex3.value,svip_7d:+ex4.value}};
+ await api('/api/admin/config',{method:'PUT',body:JSON.stringify(body)});
+ cfgTip.innerText='已保存 '+new Date().toLocaleTimeString();loadConfig();
+}
+</script>

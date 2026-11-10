@@ -1,33 +1,43 @@
-# MusicTroll
+# 屿声音乐 · Isle Music
 
-巨魔（TrollStore）用的本地音乐播放器，一条命令产出 `MusicTroll.tipa`。
+TrollStore（巨魔）安装的音乐 + 短视频客户端，带会员体系与自建后端。
 
-## 一键构建
+- 短名：屿声　英文：Isle　接口：**https://ys.irepo.cn**
+- 仓库：`Petmao/MusicTroll`
 
-macOS（装了 Xcode / 命令行工具）：
+## 目录
 
-```bash
-bash build_tipa.sh
+```
+server/            服务端（Node 20 + Express + SQLite）
+  db.js            建表
+  config.js        签到/兑换/邀请的在线配置
+  device.js        设备密钥与换绑
+  stream.js        播放票据 / 流代理 / 本地播放许可
+  server.js        全部路由
+  public/admin.html  管理后台
+  Dockerfile  docker-compose.yml  nginx.conf  README-DEPLOY.md
+
+Isle/              客户端（SwiftUI）
+  Config.swift     域名与常量（改域名只改这里）
+  Network/APIClient.swift  AuthStore.swift
+  Crypto/MTE.swift  DeviceKey.swift
+  Gate/Gates.swift  播放闸门
+
+build_tipa.sh      TrollStore 打包脚本（产物 Isle.tipa）
 ```
 
-输出：当前目录下的 `MusicTroll.tipa`。
+## 服务端部署
 
-没有 Mac：本仓库带 Actions 工作流，推送代码或手动 Run 一次，在本次 run 的 Artifacts 里下载 `MusicTroll-tipa`，解包就是 `.tipa`。
+见 `server/README-DEPLOY.md`，五步：装依赖 → 填 `.env` → 起进程 → Nginx 反代 → certbot 签证书。
 
-## 安装
+## 角色
 
-1. 把 `MusicTroll.tipa` 存进「文件」App
-2. 点它 → 分享 → TrollStore；或在 TrollStore 里 `+` → Install IPA/tipa File
-3. 打开「音乐」，右上 `+` 从文件导入 mp3 / flac；也可以直接在 文件 → 我的 iPhone → 音乐 里丢歌
+| 角色 | 能力 |
+|---|---|
+| free | 登录 / 改密码 / 看设置 |
+| vip | 听歌、音源、收藏歌单、本地加密播放 |
+| svip | 以上全部 ＋ 养眼视频 |
 
-支持 mp3 / m4a / aac / wav / aiff / caf / flac / opus / alac，后台播放、锁屏与控制中心切歌内置。
+## 免责
 
-## 可改的地方
-
-- `build_tipa.sh` 顶部：`NAME` / `BID` / `MIN`（BundleID 要唯一）
-- 想扫 iTunes 同步的 `/var/mobile/Media/iTunes_Control/Music`：在 `entitlements.plist` 加 `com.apple.private.security.no-sandbox`
-- 想加播放列表 / 倍速 / EQ：改 `src/` 下的 Swift 文件
-
-## 说明
-
-entitlements 里的 `platform-application` 是让 TrollStore 直接伪签名安装的关键；普通签名链不认这套，所以产物用 `.tipa` 后缀。
+在线内容、可用音质与播放结果取决于第三方平台和所配置的音源；本项目不内置任何音乐或视频内容。
