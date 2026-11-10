@@ -20,24 +20,45 @@ enum HTTP {
     }
 }
 
-enum ScriptError: Error {
+enum ScriptError: Error, LocalizedError {
     case syntax(String)
     case noFunction(String)
     case runtime(String)
+    case notJS(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .syntax(let s): return "音源脚本语法错误：\(s)"
+        case .noFunction(let f): return "音源脚本缺少函数 \(f)"
+        case .runtime(let s): return "音源脚本运行出错：\(s)"
+        case .notJS(let s): return "音源地址返回的不是 JS：\(s)"
+        }
+    }
 }
 
-/// 用 JavaScriptCore 跑一个音源脚本
-/// 脚本约定：
-///   function search(keyword) -> JSON 数组字符串 [{"title":"","artist":"","url":""}]
-///   function getUrl(trackJson) -> 播放地址字符串（可选，若 search 已经返回 url 就不用）
-///   function charts() -> JSON 对象字符串 {"抖音热歌":[{...}],"飙升榜":[...]}
-/// 脚本里可用 nativeHttpGet(url) 同步发 GET
+/// 用 JavaScriptCore 跑音源脚本
+/// 约定函数：search(keyword) / getUrl(trackJson) / charts()
+/// 兼容 CommonJS：module.exports.search、exports.search 也会被自动提升到全局
 final class ScriptRunner {
     private let ctx: JSContext
     let name: String
+    let preview: String
 
     init(script: String, name: String) throws {
         self.name = name
+        let trimmed = script.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.preview = String(trimmed.prefix(120)).replacingOccurrences(of: "\n", with: " ")
+
+        // 预检：拿到的是网页 / JSON 错误而不是脚本
+        if trimmed.hasPrefix("<!")
+            || trimmed.lowercased().hasPrefix("<html")
+            || trimmed.hasPrefix("Cannot ") {
+            throw ScriptError.notJS(preview)
+        }
+        if trimmed.hasPrefix("{") && trimmed.contains("\"error\"") {
+            throw ScriptError.notJS(preview)
+        }
+
         guard let context = JSContext() else { throw ScriptError.runtime("JSContext init failed") }
         self.ctx = context
 
@@ -46,15 +67,47 @@ final class ScriptRunner {
         }
         ctx.setObject(httpBlock, forKeyedSubscript: "nativeHttpGet" as NSString)
 
+        // 常见运行环境垫片，避免脚本一上来就 ReferenceError
+        ctx.evaluateScript("""
+        var window = this; var global = this; var globalThis = this;
+        var module = { exports: {} }; var exports = module.exports;
+        var console = { log: function(){}, warn: function(){}, error: function(){}, info: function(){} };
+        var lx = { env: {}, version: '2.0.0', EVENT_NAMES: { request: 'request', inited: 'inited', updateAlert: 'updateAlert' },
+                   request: function(o, cb){ try { cb && cb({ statusCode: 200, body: nativeHttpGet(o.url) }); } catch(e){} },
+                   send: function(){}, on: function(){}, utils: {} };
+        var __isleExport = null;
+        """)
+
         var thrown: String?
-        ctx.exceptionHandler = { _, exc in
-            thrown = exc?.toString() ?? "unknown"
+        ctx.exceptionHandler = { _, exc in thrown = exc?.toString() ?? "unknown" }
+
+        ctx.evaluateScript(trimmed)
+
+        // CommonJS 风格：把 module.exports 里的函数提到全局
+        ctx.evaluateScript("""
+        (function(){
+          try {
+            var e = (typeof module !== 'undefined' && module.exports) ? module.exports : exports;
+            if (e) {
+              ['search','getUrl','charts','musicSearch','getMusicUrl'].forEach(function(k){
+                if (typeof e[k] === 'function' && typeof this[k] === 'undefined') { this[k] = e[k]; }
+              }, this);
+            }
+          } catch(err) {}
+        })();
+        """)
+
+        if let t = thrown {
+            // 常见于脚本用了 import/export 模块语法，再试一次 CJS 包装
+            thrown = nil
+            let wrapped = "(function(module, exports, require, console, lx){ " + trimmed + "\n})(module, exports, function(){return {}}, console, lx);"
+            ctx.evaluateScript(wrapped)
+            if let t2 = thrown {
+                throw ScriptError.syntax("\(t2) ｜ 片段：\(preview)")
+            }
         }
-        ctx.evaluateScript(script)
-        if let t = thrown { throw ScriptError.syntax(t) }
     }
 
-    /// 调用脚本函数，返回字符串结果
     func call(_ fn: String, _ args: [Any] = []) throws -> String {
         guard let f = ctx.objectForKeyedSubscript(fn), !f.isUndefined, !f.isNull else {
             throw ScriptError.noFunction(fn)
