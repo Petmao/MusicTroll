@@ -1,17 +1,33 @@
-name: build-tipa
+name: build-ipa
+
 on:
   push:
   workflow_dispatch:
+
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build tipa
-        run: bash build_tipa.sh
-      - name: Upload artifact
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          brew install ldid || true
+
+      - name: Build unsigned ipa + tipa
+        run: bash build.sh both
+
+      - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: MusicTroll-tipa
-          path: "*.tipa"
+          name: Isle-unsigned-ipa
+          path: Isle-unsigned.ipa
           if-no-files-found: error
+
+      - name: Upload TrollStore tipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: Isle-tipa
+          path: Isle.tipa
+          if-no-files-found: warn
