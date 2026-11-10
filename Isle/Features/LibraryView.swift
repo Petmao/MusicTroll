@@ -1,30 +1,23 @@
 import SwiftUI
 
-struct SongItem: Identifiable, Codable {
-    var id = UUID()
-    var title: String
-    var artist: String
-    var cached: Bool = false
-}
-
-/// 收藏与歌单（本地存储，云同步接口已就绪）
+/// 收藏与歌单
 struct LibraryView: View {
-    @State private var favorites: [SongItem] = []
+    @ObservedObject private var fav = FavoritesStore.shared
     @State private var playlists: [String] = ["我喜欢的音乐", "夜跑 DJ 循环", "通勤白噪"]
     @State private var newName = ""
     @State private var showNew = false
 
     var body: some View {
         List {
-            Section(header: Text("收藏歌曲 · \(favorites.count) 首")) {
-                if favorites.isEmpty {
-                    Text("还没有收藏，播放时点 ♡ 就会出现在这里")
+            Section(header: Text("收藏歌曲 · \(fav.items.count) 首")) {
+                if fav.items.isEmpty {
+                    Text("还没有收藏。播放器里点 ♡ 就会出现在这里")
                         .font(.footnote).foregroundColor(.secondary)
                 } else {
-                    ForEach(favorites) { s in
+                    ForEach(fav.items) { s in
                         HStack(spacing: 10) {
-                            Image(systemName: s.cached ? "arrow.down.circle.fill" : "music.note")
-                                .foregroundColor(s.cached ? Color(red: 0.31, green: 0.90, blue: 0.66) : .gray)
+                            Image(systemName: "music.note")
+                                .foregroundColor(Color(red: 1, green: 0.37, blue: 0.62))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(s.title).font(.system(size: 14, weight: .semibold))
                                 Text(s.artist).font(.system(size: 11)).foregroundColor(.secondary)
@@ -34,13 +27,13 @@ struct LibraryView: View {
                                 .foregroundColor(Color(red: 1, green: 0.37, blue: 0.62))
                         }
                     }
-                    .onDelete { idx in favorites.remove(atOffsets: idx) }
+                    .onDelete { fav.remove(at: $0) }
                 }
             }
 
             Section(header: Text("我的歌单")) {
                 ForEach(playlists, id: \.self) { name in
-                    HStack {
+                    HStack(spacing: 11) {
                         RoundedRectangle(cornerRadius: 9)
                             .fill(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
                                                           Color(red: 0.48, green: 0.36, blue: 1)],
@@ -53,7 +46,7 @@ struct LibraryView: View {
                         Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(.secondary)
                     }
                 }
-                .onDelete { idx in playlists.remove(atOffsets: idx) }
+                .onDelete { playlists.remove(atOffsets: $0) }
 
                 Button { showNew = true } label: {
                     Label("新建歌单", systemImage: "plus.circle")
@@ -61,9 +54,7 @@ struct LibraryView: View {
                 }
             }
 
-            Section(footer: Text("歌单与收藏可以同步到云端（「我的 → 云同步」），换设备登录同一账号即可恢复。")) {
-                EmptyView()
-            }
+            Section(footer: Text("收藏与歌单可以同步到云端（我的 → 云同步）。")) { EmptyView() }
         }
         .listStyle(InsetGroupedListStyle())
         .navigationTitle("收藏与歌单")
@@ -99,7 +90,8 @@ struct LyricsView: View {
             VStack(spacing: 0) {
                 HStack {
                     Button { dismiss() } label: {
-                        Image(systemName: "chevron.up").font(.system(size: 18)).foregroundColor(.white.opacity(0.7))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 18)).foregroundColor(.white.opacity(0.7))
                     }
                     Spacer()
                     Text("歌词").font(.system(size: 12)).tracking(2).foregroundColor(.white.opacity(0.5))
@@ -108,15 +100,15 @@ struct LyricsView: View {
                         Button("字号变大") { fontSize = min(28, fontSize + 1) }
                         Button("字号变小") { fontSize = max(15, fontSize - 1) }
                     } label: {
-                        Image(systemName: "textformat.size").font(.system(size: 16)).foregroundColor(.white.opacity(0.7))
+                        Image(systemName: "textformat.size")
+                            .font(.system(size: 16)).foregroundColor(.white.opacity(0.7))
                     }
                 }
-                .padding(.horizontal, 22).padding(.top, 14)
+                .padding(.horizontal, 22).padding(.top, 16)
 
-                Spacer()
                 ScrollViewReader { proxy in
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: 18) {
+                        VStack(spacing: 20) {
                             ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
                                 Text(line)
                                     .font(.system(size: idx == current ? fontSize : fontSize - 4,
@@ -134,12 +126,11 @@ struct LyricsView: View {
                                     }
                             }
                         }
-                        .padding(.horizontal, 26).padding(.vertical, 200)
+                        .padding(.horizontal, 26).padding(.vertical, 220)
                     }
                 }
-                Spacer()
 
-                Text("点任意一行跳到该句 · 播放器中会 seek 到对应时间")
+                Text("点任意一行跳到该句")
                     .font(.system(size: 10)).foregroundColor(.white.opacity(0.3))
                     .padding(.bottom, 24)
             }

@@ -1,6 +1,5 @@
 import SwiftUI
 
-// MARK: - 示例数据（音源脚本接入后替换）
 struct Song: Identifiable, Hashable {
     let id = UUID()
     let title: String
@@ -16,7 +15,6 @@ enum DemoData {
         Song(title: "乌梅子酱", artist: "李荣浩"),
         Song(title: "晚风（Live）", artist: "陈壹千")
     ]
-
     struct Chart: Identifiable {
         let id = UUID()
         let name: String
@@ -25,28 +23,17 @@ enum DemoData {
         let c1: Color
         let c2: Color
     }
-
     static let charts: [Chart] = [
-        Chart(name: "飙升榜", songs: ["夜航星", "坠落星空", "把回忆拼好给你", "若把你", "慢冷"],
-              sub: "+128% 播放",
+        Chart(name: "飙升榜", songs: ["夜航星", "坠落星空", "把回忆拼好给你", "若把你", "慢冷"], sub: "+128% 播放",
               c1: Color(red: 1, green: 0.18, blue: 0.47), c2: Color(red: 1, green: 0.54, blue: 0)),
-        Chart(name: "热歌榜", songs: ["若把你", "乌梅子酱", "就让这大雨全都落下", "罗生门", "晚风"],
-              sub: "每日 12:00 更新",
+        Chart(name: "热歌榜", songs: ["若把你", "乌梅子酱", "就让这大雨全都落下", "罗生门", "晚风"], sub: "每日 12:00 更新",
               c1: Color(red: 0.48, green: 0.36, blue: 1), c2: Color(red: 0, green: 0.83, blue: 1)),
-        Chart(name: "新歌榜", songs: ["晚风 Live", "月亮代表谁的心", "罗生门", "孤勇者", "就这样"],
-              sub: "本周 40 首",
+        Chart(name: "新歌榜", songs: ["晚风 Live", "月亮代表谁的心", "罗生门", "孤勇者", "就这样"], sub: "本周 40 首",
               c1: Color(red: 0, green: 0.88, blue: 0.64), c2: Color(red: 0, green: 0.64, blue: 1)),
-        Chart(name: "DJ 专区", songs: ["Bones Remix", "车载慢摇", "蹦迪电音", "夜店串烧", "抖腿神曲"],
-              sub: "电音 / 慢摇",
+        Chart(name: "DJ 专区", songs: ["Bones Remix", "车载慢摇", "蹦迪电音", "夜店串烧", "抖腿神曲"], sub: "电音 / 慢摇",
               c1: Color(red: 1, green: 0.82, blue: 0.25), c2: Color(red: 1, green: 0.18, blue: 0.47))
     ]
-
-    struct LyricLine {
-        let text: String
-        let song: String
-        let artist: String
-    }
-
+    struct LyricLine { let text: String; let song: String; let artist: String }
     static let sadLyrics: [LyricLine] = [
         LyricLine(text: "我把所有的委屈都咽下去，只为了在你面前笑得像个没事人", song: "慢冷", artist: "梁静茹"),
         LyricLine(text: "你走后，我把每首歌都听成了你", song: "坠落星空", artist: "阿YueYue"),
@@ -57,33 +44,34 @@ enum DemoData {
     ]
 }
 
-// MARK: - 首页
 struct HomeView: View {
     @EnvironmentObject var auth: AuthStore
+    @StateObject private var engine = MusicEngine.shared
     @State private var lyricIndex = 0
     @State private var hotBatch: [Song] = Array(DemoData.hot.shuffled().prefix(3))
     @State private var chartSongs: [String: [String]] = [:]
 
-    private var lyric: DemoData.LyricLine {
-        DemoData.sadLyrics[lyricIndex % DemoData.sadLyrics.count]
-    }
+    private var lyric: DemoData.LyricLine { DemoData.sadLyrics[lyricIndex % DemoData.sadLyrics.count] }
 
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [Color(red: 0.13, green: 0.04, blue: 0.19),
-                                    Color(red: 0.03, green: 0.03, blue: 0.05)],
-                           startPoint: .top, endPoint: .bottom).ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    header
-                    lyricBar
-                    hotCard.padding(.top, 18)
-                    chartsSection.padding(.top, 18)
+        NavigationView {
+            ZStack {
+                LinearGradient(colors: [Color(red: 0.13, green: 0.04, blue: 0.19),
+                                        Color(red: 0.03, green: 0.03, blue: 0.05)],
+                               startPoint: .top, endPoint: .bottom).ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        header
+                        lyricBar
+                        hotCard.padding(.top, 18)
+                        chartsSection.padding(.top, 18)
+                    }
+                    .padding(.horizontal, 20).padding(.bottom, 28)
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 28)
             }
+            .navigationBarHidden(true)
         }
+        .navigationViewStyle(StackNavigationViewStyle())
         .onAppear { roll() }
         .onReceive(Timer.publish(every: 15, on: .main, in: .common).autoconnect()) { _ in
             withAnimation(.easeOut(duration: 0.45)) { lyricIndex += 1 }
@@ -94,14 +82,19 @@ struct HomeView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(greeting).font(.system(size: 12)).foregroundColor(.gray)
-                Text("发现").font(.system(size: 25, weight: .heavy)).foregroundColor(.white)
+                Text("发现").font(.system(size: 25, weight: .heavy))
             }
             Spacer()
             HStack(spacing: 18) {
-                Image(systemName: "magnifyingglass").font(.system(size: 18))
-                Image(systemName: "bell").font(.system(size: 18))
+                NavigationLink(destination: SearchView()) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 18)).foregroundColor(.gray)
+                }
+                NavigationLink(destination: CheckinView()) {
+                    Image(systemName: "bell").font(.system(size: 18)).foregroundColor(.gray)
+                }
             }
-            .foregroundColor(.gray).padding(.top, 8)
+            .padding(.top, 8)
         }
         .padding(.top, 18)
     }
@@ -117,13 +110,13 @@ struct HomeView: View {
 
     private var lyricBar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button { withAnimation(.easeOut(duration: 0.45)) { lyricIndex += 1 } } label: {
+            Button {
+                withAnimation(.easeOut(duration: 0.45)) { lyricIndex += 1 }
+                Task { await engine.play(keyword: lyric.song) }
+            } label: {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(lyric.text)
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(.white)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(lyric.text).font(.system(size: 17, weight: .bold))
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     HStack(spacing: 6) {
                         Image(systemName: "music.note").font(.system(size: 9))
@@ -145,8 +138,7 @@ struct HomeView: View {
                                               startPoint: .leading, endPoint: .trailing))
                     .frame(maxWidth: 180)
             }
-            .frame(height: 1.5)
-            .padding(.top, 12)
+            .frame(height: 1.5).padding(.top, 12)
         }
         .padding(.top, 14)
     }
@@ -165,23 +157,25 @@ struct HomeView: View {
                 }
             }
             ForEach(hotBatch) { s in
-                HStack(spacing: 11) {
-                    Circle()
-                        .fill(LinearGradient(colors: [Color(red: 1, green: 0.62, blue: 0.35),
-                                                      Color(red: 0.76, green: 0.25, blue: 0.45)],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 44, height: 44)
-                        .overlay(Image(systemName: "person.fill").font(.system(size: 16))
-                                    .foregroundColor(.white.opacity(0.65)))
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(s.title).font(.system(size: 13, weight: .semibold))
-                        Text(s.artist).font(.system(size: 10.5)).foregroundColor(.gray)
-                    }
-                    Spacer()
-                    Image(systemName: "play.fill").font(.system(size: 11))
-                        .foregroundColor(Color(red: 1, green: 0.37, blue: 0.62))
+                Button { Task { await engine.play(keyword: s.title) } } label: {
+                    HStack(spacing: 11) {
+                        Circle()
+                            .fill(LinearGradient(colors: [Color(red: 1, green: 0.62, blue: 0.35),
+                                                          Color(red: 0.76, green: 0.25, blue: 0.45)],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 44, height: 44)
+                            .overlay(Image(systemName: "person.fill")
+                                        .font(.system(size: 16)).foregroundColor(.white.opacity(0.65)))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(s.title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                            Text(s.artist).font(.system(size: 10.5)).foregroundColor(.gray)
+                        }
+                        Spacer()
+                        Image(systemName: "play.fill").font(.system(size: 11))
+                            .foregroundColor(Color(red: 1, green: 0.37, blue: 0.62))
+                    }.padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
+                .buttonStyle(PlainButtonStyle())
             }
         }
         .padding(14)
@@ -214,20 +208,19 @@ struct HomeView: View {
                     Text("换").font(.system(size: 9.5, weight: .bold))
                         .padding(.horizontal, 7).padding(.vertical, 3)
                         .background(Color.black.opacity(0.2)).clipShape(Capsule())
-                }
-                .foregroundColor(.white)
+                }.foregroundColor(.white)
             }
             ForEach(shown(c), id: \.self) { name in
-                Text(name).font(.system(size: 10.5, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.95))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button { Task { await engine.play(keyword: name) } } label: {
+                    Text(name).font(.system(size: 10.5, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.95)).lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }.buttonStyle(PlainButtonStyle())
             }
             Spacer(minLength: 0)
             Text(c.sub).font(.system(size: 9)).foregroundColor(.white.opacity(0.6))
         }
-        .padding(11)
-        .frame(height: 132, alignment: .top)
+        .padding(11).frame(height: 132, alignment: .top)
         .background(LinearGradient(colors: [c.c1, c.c2], startPoint: .topLeading, endPoint: .bottomTrailing))
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
