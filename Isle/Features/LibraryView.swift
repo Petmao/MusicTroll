@@ -1,12 +1,45 @@
 import SwiftUI
 
-/// 收藏与歌单（按设计稿：深色、彩色封面行、批量管理）
+struct IslePlaylist: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var name: String
+    var songs: [String] = []
+}
+
+final class PlaylistStore: ObservableObject {
+    static let shared = PlaylistStore()
+    private let key = "isle.playlists"
+    @Published var lists: [IslePlaylist] = []
+
+    init() {
+        if let d = UserDefaults.standard.data(forKey: key),
+           let v = try? JSONDecoder().decode([IslePlaylist].self, from: d) {
+            lists = v
+        } else {
+            lists = [IslePlaylist(name: "我喜欢的音乐"), IslePlaylist(name: "夜跑 DJ 循环")]
+        }
+    }
+
+    func add(_ name: String) {
+        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        lists.append(IslePlaylist(name: name))
+        save()
+    }
+
+    func remove(at offsets: IndexSet) { lists.remove(atOffsets: offsets); save() }
+
+    private func save() {
+        if let d = try? JSONEncoder().encode(lists) { UserDefaults.standard.set(d, forKey: key) }
+    }
+}
+
 struct LibraryView: View {
     @ObservedObject private var fav = FavoritesStore.shared
-    @State private var playlists: [String] = ["我喜欢的音乐", "夜跑 DJ 循环", "通勤白噪"]
+    @ObservedObject private var store = PlaylistStore.shared
+    @State private var tab = 0
     @State private var newName = ""
     @State private var showNew = false
-    @State private var tab = 0
+    @State private var openList: IslePlaylist?
 
     private let tabs = ["收藏", "歌单", "本地"]
     private let covers: [LinearGradient] = [
@@ -15,99 +48,15 @@ struct LibraryView: View {
         LinearGradient(colors: [Color(red: 0.48, green: 0.36, blue: 1), Color(red: 0, green: 0.83, blue: 1)],
                        startPoint: .topLeading, endPoint: .bottomTrailing),
         LinearGradient(colors: [Color(red: 1, green: 0.82, blue: 0.25), Color(red: 1, green: 0.42, blue: 0)],
-                       startPoint: .topLeading, endPoint: .bottomTrailing),
-        LinearGradient(colors: [Color(red: 0, green: 0.88, blue: 0.64), Color(red: 0, green: 0.64, blue: 1)],
                        startPoint: .topLeading, endPoint: .bottomTrailing)
     ]
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.13, green: 0.04, blue: 0.19),
-                                    Color(red: 0.03, green: 0.03, blue: 0.05)],
-                           startPoint: .top, endPoint: .bottom).ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 8) {
-                        ForEach(0..<tabs.count, id: \.self) { i in
-                            Button { tab = i } label: {
-                                Text(tabs[i])
-                                    .font(.system(size: 12, weight: tab == i ? .bold : .regular))
-                                    .padding(.horizontal, 13).padding(.vertical, 7)
-                                    .background(tab == i
-                                                ? AnyView(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
-                                                                                  Color(red: 1, green: 0.48, blue: 0.18)],
-                                                                         startPoint: .leading, endPoint: .trailing))
-                                                : AnyView(Color.white.opacity(0.06)))
-                                    .clipShape(Capsule())
-                                    .foregroundColor(tab == i ? .white : .white.opacity(0.6))
-                            }
-                        }
-                        Spacer()
-                    }
-
-                    sectionHeader("收藏歌曲 · \(fav.items.count) 首")
-                    if fav.items.isEmpty {
-                        Text("还没有收藏。播放器里点 ♡ 就会出现在这里")
-                            .font(.system(size: 11.5)).foregroundColor(.white.opacity(0.35))
-                            .padding(.vertical, 6)
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(Array(fav.items.enumerated()), id: \.offset) { idx, s in
-                                HStack(spacing: 11) {
-                                    RoundedRectangle(cornerRadius: 11)
-                                        .fill(covers[idx % covers.count])
-                                        .frame(width: 40, height: 40)
-                                        .overlay(Image(systemName: "music.note")
-                                                    .font(.system(size: 14)).foregroundColor(.white.opacity(0.85)))
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(s.title).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
-                                        Text(s.artist).font(.system(size: 10.5)).foregroundColor(.white.opacity(0.4))
-                                    }
-                                    Spacer()
-                                    Image(systemName: "heart.fill")
-                                        .font(.system(size: 14)).foregroundColor(Color(red: 1, green: 0.37, blue: 0.62))
-                                }
-                                .padding(.vertical, 9)
-                                Divider().background(Color.white.opacity(0.05))
-                            }
-                        }
-                    }
-
-                    sectionHeader("我的歌单")
-                    VStack(spacing: 0) {
-                        ForEach(Array(playlists.enumerated()), id: \.offset) { idx, name in
-                            HStack(spacing: 11) {
-                                RoundedRectangle(cornerRadius: 11)
-                                    .fill(covers[(idx + 1) % covers.count])
-                                    .frame(width: 40, height: 40)
-                                    .overlay(Image(systemName: "music.note.list")
-                                                .font(.system(size: 14)).foregroundColor(.white.opacity(0.9)))
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(name).font(.system(size: 13.5, weight: .semibold))
-                                    Text("可同步到云端").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.4))
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(.white.opacity(0.3))
-                            }
-                            .padding(.vertical, 9)
-                            Divider().background(Color.white.opacity(0.05))
-                        }
-                        Button { showNew = true } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "plus.circle")
-                                Text("新建歌单")
-                            }
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(Color(red: 1, green: 0.45, blue: 0.65))
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 10)
-                        }
-                    }
-
-                    Text("批量管理（全选 / 移出 / 加入其他歌单）会在下个版本加上。")
-                        .font(.system(size: 10)).foregroundColor(.white.opacity(0.25))
-                        .padding(.bottom, 20)
-                }
-                .padding(.horizontal, 16).padding(.top, 10)
+            MineTheme.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                header
+                content
             }
         }
         .navigationTitle("收藏与歌单")
@@ -115,127 +64,159 @@ struct LibraryView: View {
         .alert("新建歌单", isPresented: $showNew) {
             TextField("歌单名称", text: $newName)
             Button("取消", role: .cancel) { newName = "" }
-            Button("创建") {
-                let n = newName.trimmingCharacters(in: .whitespaces)
-                if !n.isEmpty { playlists.append(n) }
-                newName = ""
+            Button("创建") { store.add(newName); newName = "" }
+        }
+        .sheet(item: $openList) { p in
+            PlaylistDetailView(playlist: p)
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(tabs.enumerated()), id: \.offset) { i, t in
+                Button { tab = i } label: {
+                    Text(t)
+                        .font(.system(size: 12.5, weight: tab == i ? .bold : .regular))
+                        .foregroundColor(tab == i ? .white : Color(white: 0.55))
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .background(
+                            Capsule().fill(tab == i
+                                ? AnyShapeStyle(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
+                                                                        Color(red: 1, green: 0.48, blue: 0.18)],
+                                                               startPoint: .leading, endPoint: .trailing))
+                                : AnyShapeStyle(Color.white.opacity(0.06)))
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            Spacer()
+            if tab == 1 {
+                Button { showNew = true } label: {
+                    Image(systemName: "plus").font(.system(size: 13, weight: .bold))
+                        .foregroundColor(MineTheme.pink)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+    }
+
+    @ViewBuilder private var content: some View {
+        switch tab {
+        case 0: favList
+        case 1: playlistGrid
+        default: localEmpty
+        }
+    }
+
+    private var favList: some View {
+        Group {
+            if fav.items.isEmpty {
+                emptyHint("还没有收藏的歌曲", "在播放器点 ♡ 就会出现在这里")
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 8) {
+                        ForEach(fav.items) { s in
+                            HStack(spacing: 10) {
+                                RoundedRectangle(cornerRadius: 11).fill(covers[0])
+                                    .frame(width: 40, height: 40)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(s.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                                    Text(s.artist).font(.system(size: 10.5)).foregroundColor(.gray).lineLimit(1)
+                                }
+                                Spacer()
+                                Button {
+                                    fav.toggle(title: s.title, artist: s.artist)
+                                } label: {
+                                    Image(systemName: "heart.fill")
+                                        .font(.system(size: 13)).foregroundColor(MineTheme.pink)
+                                }
+                            }
+                            .padding(10)
+                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.05)))
+                        }
+                    }
+                    .padding(.horizontal, 12).padding(.bottom, 20)
+                }
             }
         }
     }
 
-    private func sectionHeader(_ t: String) -> some View {
-        Text(t).font(.system(size: 13, weight: .bold)).foregroundColor(.white.opacity(0.55))
+    private var playlistGrid: some View {
+        Group {
+            if store.lists.isEmpty {
+                emptyHint("还没有歌单", "点右上角 + 新建一个")
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10),
+                                        GridItem(.flexible(), spacing: 10)], spacing: 12) {
+                        ForEach(Array(store.lists.enumerated()), id: \.element.id) { i, p in
+                            Button { openList = p } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(covers[i % covers.count])
+                                        .frame(height: 100)
+                                        .overlay(Text("\(p.songs.count) 首")
+                                                    .font(.system(size: 9.5, weight: .bold))
+                                                    .padding(.horizontal, 7).padding(.vertical, 3)
+                                                    .background(Capsule().fill(Color.black.opacity(0.35))),
+                                                 alignment: .bottomTrailing)
+                                    Text(p.name).font(.system(size: 12, weight: .bold)).lineLimit(1)
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, 12).padding(.bottom, 20)
+                }
+            }
+        }
+    }
+
+    private var localEmpty: some View {
+        emptyHint("还没有本地音乐", "下载完成的歌曲会出现在这里")
+    }
+
+    private func emptyHint(_ title: String, _ sub: String) -> some View {
+        VStack(spacing: 6) {
+            Spacer()
+            Text(title).font(.system(size: 14, weight: .semibold)).foregroundColor(.white.opacity(0.7))
+            Text(sub).font(.system(size: 11)).foregroundColor(.white.opacity(0.35))
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
-/// 全屏歌词（按设计稿：顶部小封面、居中高亮、底部工具栏）
-struct LyricsView: View {
+struct PlaylistDetailView: View {
+    let playlist: IslePlaylist
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var engine = MusicEngine.shared
-    @State private var current = 3
-    @State private var fontSize: CGFloat = 20
-
-    private let lines = [
-        "街角的路灯还亮着", "风把从前吹回来", "把耳机调到最大声",
-        "我坠落在这片星空里", "找不到你来过的痕迹", "如果光也会怕黑",
-        "那就让我替你失眠", "这段路我走了很久", "还是没有走到你身边"
-    ]
 
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [Color(red: 0.16, green: 0.05, blue: 0.22),
-                                    Color(red: 0.07, green: 0.04, blue: 0.12),
-                                    Color(red: 0.03, green: 0.03, blue: 0.05)],
-                           startPoint: .top, endPoint: .bottom).ignoresSafeArea()
-            VStack(spacing: 0) {
-                HStack(spacing: 10) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 17)).foregroundColor(.white.opacity(0.7))
-                    }
-                    Spacer()
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(LinearGradient(colors: [Color(red: 1, green: 0.42, blue: 0.62),
-                                                          Color(red: 0.48, green: 0.36, blue: 1)],
-                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 30, height: 30)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(engine.current?.title ?? "未播放")
-                                .font(.system(size: 11, weight: .semibold)).lineLimit(1)
-                            Text(engine.current?.artist ?? "-")
-                                .font(.system(size: 9)).foregroundColor(.white.opacity(0.45))
-                        }
-                    }
-                    Spacer()
-                    Menu {
-                        Button("字号变大") { fontSize = min(28, fontSize + 1) }
-                        Button("字号变小") { fontSize = max(15, fontSize - 1) }
-                    } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 16)).foregroundColor(.white.opacity(0.6))
-                    }
-                }
-                .padding(.horizontal, 22).padding(.top, 14)
-
-                ScrollViewReader { proxy in
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 18) {
-                            ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
-                                HStack(spacing: 10) {
-                                    if idx == current {
-                                        RoundedRectangle(cornerRadius: 2)
-                                            .fill(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
-                                                                          Color(red: 1, green: 0.70, blue: 0.28)],
-                                                                 startPoint: .top, endPoint: .bottom))
-                                            .frame(width: 3, height: fontSize + 6)
-                                    }
-                                    Text(line)
-                                        .font(.system(size: idx == current ? fontSize : fontSize - 5,
-                                                      weight: idx == current ? .heavy : .semibold))
-                                        .foregroundColor(idx == current
-                                                         ? Color(red: 1, green: 0.55, blue: 0.72)
-                                                         : .white.opacity(abs(idx - current) <= 1 ? 0.45 : 0.2))
-                                        .id(idx)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        current = idx
-                                        proxy.scrollTo(idx, anchor: .center)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 24).padding(.vertical, 210)
-                    }
-                }
-
+        NavigationView {
+            ZStack {
+                MineTheme.bg.ignoresSafeArea()
                 VStack(spacing: 10) {
-                    GeometryReader { g in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color.white.opacity(0.16))
-                            Capsule()
-                                .fill(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
-                                                              Color(red: 1, green: 0.70, blue: 0.28)],
-                                                     startPoint: .leading, endPoint: .trailing))
-                                .frame(width: g.size.width * CGFloat(engine.progress))
-                        }
-                    }
-                    .frame(height: 3)
-
-                    HStack {
-                        Text("点任意一行跳到该句")
+                    if playlist.songs.isEmpty {
+                        Text("这个歌单还是空的").font(.system(size: 12)).foregroundColor(.gray)
+                        Text("在收藏页长按歌曲 → 加入歌单（下一步实现）")
                             .font(.system(size: 10)).foregroundColor(.white.opacity(0.3))
-                        Spacer()
-                        Button { engine.toggle() } label: {
-                            Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 16)).foregroundColor(.white)
+                    } else {
+                        ForEach(playlist.songs, id: \.self) { s in
+                            Text(s).font(.system(size: 13))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.05)))
                         }
                     }
+                    Spacer()
                 }
-                .padding(.horizontal, 22).padding(.bottom, 22)
+                .padding(16)
             }
+            .navigationTitle(playlist.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } } }
         }
     }
 }
