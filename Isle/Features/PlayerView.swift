@@ -1,11 +1,13 @@
 import SwiftUI
 
 struct PlayerView: View {
+    @ObservedObject private var engine = MusicEngine.shared
     @State private var angle: Double = 0
-    @State private var playing = false
     @State private var showLyrics = false
     @State private var showList = false
-    @State private var progress: CGFloat = 0.38
+    @State private var dragRatio: Double?
+
+    private var ratio: Double { dragRatio ?? engine.progress }
 
     var body: some View {
         GeometryReader { geo in
@@ -18,10 +20,11 @@ struct PlayerView: View {
                     discView(disc)
                     Spacer(minLength: 0)
                     infoRow
-                    lyricEntry.padding(.top, 14)
-                    progressBlock.padding(.top, 16)
-                    controls.padding(.top, 20)
-                    homeBar.padding(.top, 18)
+                    statusLine.padding(.top, 8)
+                    lyricEntry.padding(.top, 10)
+                    progressBlock.padding(.top, 14)
+                    controls.padding(.top, 18)
+                    homeBar.padding(.top, 16)
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 6)
@@ -30,6 +33,10 @@ struct PlayerView: View {
         }
         .sheet(isPresented: $showLyrics) { PlayerLyricSheet() }
         .sheet(isPresented: $showList) { PlaylistSheet() }
+        .onChange(of: engine.isPlaying) { playing in
+            if playing { startSpin() }
+        }
+        .onAppear { if engine.isPlaying { startSpin() } }
     }
 
     private var topBar: some View {
@@ -74,33 +81,54 @@ struct PlayerView: View {
                 .rotationEffect(.degrees(angle))
         }
         .frame(width: size, height: size)
-        .onAppear { if playing { startSpin() } }
     }
 
     private var infoRow: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("坠落星空（女版）").font(.system(size: 20, weight: .heavy)).lineLimit(1)
-                Text("阿YueYue").font(.system(size: 11)).foregroundColor(.gray).lineLimit(1)
+                Text(engine.current?.title ?? "未选择歌曲")
+                    .font(.system(size: 20, weight: .heavy)).lineLimit(1)
+                Text(engine.current?.artist ?? "去搜索或点一首歌")
+                    .font(.system(size: 11)).foregroundColor(.gray).lineLimit(1)
             }
             Spacer(minLength: 12)
             HStack(spacing: 16) {
-                Image(systemName: "heart").font(.system(size: 17)).foregroundColor(.white.opacity(0.85))
-                Image(systemName: "arrow.down.to.line").font(.system(size: 17)).foregroundColor(.white.opacity(0.85))
+                Button {
+                    if let t = engine.current?.title, let a = engine.current?.artist {
+                        FavoritesStore.shared.toggle(title: t, artist: a)
+                    }
+                } label: {
+                    let liked = FavoritesStore.shared.contains(engine.current?.title ?? "",
+                                                               engine.current?.artist ?? "")
+                    Image(systemName: liked ? "heart.fill" : "heart")
+                        .font(.system(size: 17))
+                        .foregroundColor(liked ? MineTheme.pink : .white.opacity(0.85))
+                }
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: 17)).foregroundColor(.white.opacity(0.85))
             }
+        }
+    }
+
+    private var statusLine: some View {
+        HStack {
+            Text(engine.status)
+                .font(.system(size: 10)).foregroundColor(.white.opacity(0.4)).lineLimit(1)
+            Spacer()
         }
     }
 
     private var lyricEntry: some View {
         Button { showLyrics = true } label: {
-            VStack(spacing: 3) {
-                Text("点这里看全部歌词")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white.opacity(0.92))
-                Text("逐字歌词 · 支持点行跳转")
-                    .font(.system(size: 10.5)).foregroundColor(.white.opacity(0.35))
+            HStack(spacing: 6) {
+                Image(systemName: "quote.bubble").font(.system(size: 12))
+                Text("点这里看全部歌词").font(.system(size: 13, weight: .bold))
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 10)).foregroundColor(.white.opacity(0.3))
             }
-            .frame(maxWidth: .infinity)
+            .foregroundColor(.white.opacity(0.9))
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -110,39 +138,55 @@ struct PlayerView: View {
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.white.opacity(0.18)).frame(height: 3)
-                    Capsule().fill(Color.white).frame(width: g.size.width * progress, height: 3)
+                    Capsule().fill(MineTheme.pink).frame(width: max(0, g.size.width * ratio), height: 3)
                     Circle().fill(Color.white).frame(width: 11, height: 11)
-                        .offset(x: g.size.width * progress - 5.5)
+                        .offset(x: max(0, g.size.width * ratio - 5.5))
                 }
-                .frame(height: 14)
+                .frame(height: 16)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { v in
+                            dragRatio = min(1, max(0, v.location.x / max(1, g.size.width)))
+                        }
+                        .onEnded { v in
+                            let r = min(1, max(0, v.location.x / max(1, g.size.width)))
+                            dragRatio = nil
+                            engine.seek(to: r)
+                        }
+                )
             }
-            .frame(height: 14)
+            .frame(height: 16)
             HStack {
-                Text("1:32").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.55))
+                Text("\(Int(ratio * 100))%").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.55))
                 Spacer()
-                Text("4:00").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.55))
+                Text(engine.isPlaying ? "播放中" : "已暂停")
+                    .font(.system(size: 10.5)).foregroundColor(.white.opacity(0.55))
             }
         }
     }
 
     private var controls: some View {
         HStack {
-            Image(systemName: "shuffle").font(.system(size: 17)).foregroundColor(.white.opacity(0.6))
+            Button { showLyrics = true } label: {
+                Image(systemName: "shuffle").font(.system(size: 17)).foregroundColor(.white.opacity(0.6))
+            }
             Spacer()
-            Image(systemName: "backward.fill").font(.system(size: 21)).foregroundColor(.white)
+            Image(systemName: "backward.fill").font(.system(size: 21)).foregroundColor(.white.opacity(0.45))
             Spacer()
             Button {
-                playing.toggle()
-                if playing { startSpin() } else { angle = 0 }
+                engine.toggle()
+                if engine.isPlaying { startSpin() }
             } label: {
                 ZStack {
                     Circle().fill(Color.white).frame(width: 64, height: 64)
-                    Image(systemName: playing ? "pause.fill" : "play.fill")
+                    Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 22)).foregroundColor(.black)
+                        .offset(x: engine.isPlaying ? 0 : 2)
                 }
             }
             Spacer()
-            Image(systemName: "forward.fill").font(.system(size: 21)).foregroundColor(.white)
+            Image(systemName: "forward.fill").font(.system(size: 21)).foregroundColor(.white.opacity(0.45))
             Spacer()
             Button { showList = true } label: {
                 Image(systemName: "list.bullet").font(.system(size: 17)).foregroundColor(.white.opacity(0.6))
@@ -155,6 +199,7 @@ struct PlayerView: View {
     }
 
     private func startSpin() {
+        angle = 0
         withAnimation(.linear(duration: 22).repeatForever(autoreverses: false)) {
             angle = 360
         }
@@ -163,6 +208,7 @@ struct PlayerView: View {
 
 struct PlayerLyricSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var engine = MusicEngine.shared
     private let lines = ["街角的路灯还亮着", "风把从前吹回来", "把耳机调到最大声",
                          "我坠落在这片星空里", "找不到你来过的痕迹", "如果光也会怕黑"]
     @State private var current = 3
@@ -172,7 +218,7 @@ struct PlayerLyricSheet: View {
             MineTheme.bg.ignoresSafeArea()
             VStack(spacing: 0) {
                 HStack {
-                    Text("坠落星空（女版）").font(.system(size: 13, weight: .bold))
+                    Text(engine.current?.title ?? "歌词").font(.system(size: 13, weight: .bold))
                     Spacer()
                     Button("关闭") { dismiss() }.font(.system(size: 12))
                 }
@@ -204,6 +250,7 @@ struct PlayerLyricSheet: View {
 
 struct PlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var engine = MusicEngine.shared
     private let list = DemoData.hot
 
     var body: some View {
@@ -212,9 +259,21 @@ struct PlaylistSheet: View {
                 MineTheme.bg.ignoresSafeArea()
                 List {
                     ForEach(list) { s in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(s.title).font(.system(size: 14, weight: .semibold))
-                            Text(s.artist).font(.system(size: 11)).foregroundColor(.gray)
+                        Button {
+                            dismiss()
+                            Task { await engine.play(keyword: s.title) }
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(s.title).font(.system(size: 14, weight: .semibold))
+                                    Text(s.artist).font(.system(size: 11)).foregroundColor(.gray)
+                                }
+                                Spacer()
+                                if engine.current?.title == s.title {
+                                    Image(systemName: "waveform")
+                                        .foregroundColor(MineTheme.pink)
+                                }
+                            }
                         }
                     }
                 }
