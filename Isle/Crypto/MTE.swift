@@ -48,8 +48,8 @@ struct MTEHeader {
         var ff = nonceBase; ff.append(contentsOf: [0xFF, 0xFF, 0xFF, 0xFF])
         let box = try AES.GCM.SealedBox(nonce: try AES.GCM.Nonce(data: ff), ciphertext: Data(), tag: tag)
         _ = try AES.GCM.open(box, using: key, authenticating: prefix)
-        func u32(_ o: Int) -> UInt32 { head.subdata(in: o..<(o+4)).withUnsafeBytes { $0.load(as: UInt32.self) }.littleEndian }
-        func u64(_ o: Int) -> UInt64 { head.subdata(in: o..<(o+8)).withUnsafeBytes { $0.load(as: UInt64.self) }.littleEndian }
+        func u32(_ o: Int) -> UInt32 { head.subdata(in: o..<(o + 4)).withUnsafeBytes { $0.load(as: UInt32.self) }.littleEndian }
+        func u64(_ o: Int) -> UInt64 { head.subdata(in: o..<(o + 8)).withUnsafeBytes { $0.load(as: UInt64.self) }.littleEndian }
         return MTEHeader(chunkSize: u32(8), nonceBase: nonceBase, mime: head[20], plainSize: u64(24), chunkCount: u32(32), prefix: prefix)
     }
     func offset(of i: Int) -> UInt64 { UInt64(MTE.headerSize) + UInt64(i) * (UInt64(chunkSize) + UInt64(MTE.tagLen)) }
@@ -133,11 +133,14 @@ final class MTEAssetSource: NSObject, AVAssetResourceLoaderDelegate {
                 info.isByteRangeAccessSupported = true
             }
             guard let dr = req.dataRequest else { return true }
-            var offset = dr.requestedOffset
+
+            let total = Int(header.plainSize)
+            let start = Int(dr.requestedOffset)
             var length = dr.requestedLength
-            if dr.requestsAllDataToEndOfResource || length == 0 { length = Int(header.plainSize) - offset }
-            length = max(0, min(length, Int(header.plainSize) - offset))
-            if length > 0 { dr.respond(with: try decrypt(range: offset..<(offset + length))) }
+            if dr.requestsAllDataToEndOfResource || length == 0 { length = total - start }
+            length = max(0, min(length, total - start))
+            if length > 0 { dr.respond(with: try decrypt(range: start..<(start + length))) }
+
             req.finishLoading()
             return true
         } catch {
