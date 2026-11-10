@@ -17,9 +17,7 @@ struct SettingsView: View {
                     sources
                     logoutCard
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 30)
+                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 30)
             }
         }
         .navigationTitle("设置")
@@ -42,7 +40,6 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 9) {
             label("外观与语言")
             seg(options: [("dark", "深色"), ("light", "浅色"), ("auto", "跟随系统")], sel: $theme)
-                .padding(.top, 0)
             seg(options: [("zh", "中文"), ("en", "English")], sel: $lang)
         }
         .padding(14)
@@ -54,7 +51,8 @@ struct SettingsView: View {
         HStack(spacing: 4) {
             ForEach(options, id: \.0) { key, title in
                 Button { sel.wrappedValue = key } label: {
-                    Text(title).font(.system(size: 11.5, weight: sel.wrappedValue == key ? .semibold : .regular))
+                    Text(title)
+                        .font(.system(size: 11.5, weight: sel.wrappedValue == key ? .semibold : .regular))
                         .foregroundColor(sel.wrappedValue == key ? .white : Color(white: 0.6))
                         .frame(maxWidth: .infinity).padding(.vertical, 7)
                         .background(RoundedRectangle(cornerRadius: 10)
@@ -98,29 +96,33 @@ struct SettingsView: View {
     private var sources: some View {
         VStack(alignment: .leading, spacing: 0) {
             label("源与同步").padding(.bottom, 4)
-            rowLink("音乐音源", "脚本 / 音质 / 优先级") { MusicSourceView() }
+            NavigationLink(destination: MusicSourceSettingsView()) {
+                row("音乐音源", "脚本 / 音质 / 优先级")
+            }
             Divider().background(Color.white.opacity(0.06))
-            rowLink("视频源", "养眼频道脚本地址") { VideoSourceView() }
+            NavigationLink(destination: VideoSourceSettingsView()) {
+                row("视频源", "养眼频道脚本地址")
+            }
             Divider().background(Color.white.opacity(0.06))
-            rowLink("设备管理", "当前 / 历史设备") { DeviceView() }
+            NavigationLink(destination: DeviceView()) {
+                row("设备管理", "当前 / 历史设备")
+            }
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.05)))
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
     }
 
-    private func rowLink<V: View>(_ title: String, _ sub: String, @ViewBuilder dest: @escaping () -> V) -> some View {
-        NavigationLink(destination: dest()) {
-            HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.system(size: 13, weight: .semibold))
-                    Text(sub).font(.system(size: 11)).foregroundColor(.gray)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(.white.opacity(0.3))
+    private func row(_ title: String, _ sub: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                Text(sub).font(.system(size: 11)).foregroundColor(.gray)
             }
-            .padding(.vertical, 9)
+            Spacer()
+            Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(.white.opacity(0.3))
         }
+        .padding(.vertical, 9)
     }
 
     private var logoutCard: some View {
@@ -135,10 +137,8 @@ struct SettingsView: View {
                     .font(.system(size: 9.5)).foregroundColor(.white.opacity(0.35))
             }
             .frame(maxWidth: .infinity).padding(.vertical, 12)
-            .background(RoundedRectangle(cornerRadius: 18)
-                .fill(Color(red: 1, green: 0.18, blue: 0.47).opacity(0.07)))
-            .overlay(RoundedRectangle(cornerRadius: 18)
-                .stroke(Color(red: 1, green: 0.37, blue: 0.62).opacity(0.28), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 18).fill(Color(red: 1, green: 0.18, blue: 0.47).opacity(0.07)))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(red: 1, green: 0.37, blue: 0.62).opacity(0.28), lineWidth: 1))
         }
         .buttonStyle(PlainButtonStyle())
         .padding(.top, 4)
