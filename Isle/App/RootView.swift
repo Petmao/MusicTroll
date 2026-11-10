@@ -74,25 +74,31 @@ struct TabItemView: View {
 struct MineView: View {
     @EnvironmentObject var auth: AuthStore
     @StateObject private var r = MineRouter()
+    @State private var recent: [String] = ["夜航星", "坠落星空（女版）", "慢冷", "晚风"]
 
     var body: some View {
         NavigationView {
             ZStack {
                 MineTheme.bg.ignoresSafeArea()
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        MineMemberCard(nickname: auth.user?.nickname ?? "未登录") { r.settings = true }
-                        MineQuickRow(checkin: $r.checkin, invite: $r.invite, fav: $r.fav).padding(.top, 11)
-                        MineRecentRow(names: MineView.demoRecent).padding(.top, 14)
-                        MineGrid(fav: $r.fav, cloud: $r.cloud, device: $r.device, settings: $r.settings).padding(.top, 14)
-                        MinePlaylists { r.fav = true }.padding(.top, 14)
-                        MineSettingsRow { r.settings = true }.padding(.top, 14)
-                        Text("屿声音乐 " + Config.version)
-                            .font(.system(size: 9.5))
-                            .foregroundColor(.white.opacity(0.2))
-                            .padding(.top, 14).padding(.bottom, 24)
+                VStack(spacing: 0) {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            MineMemberCard(nickname: auth.user?.nickname ?? "未登录") { r.settings = true }
+                            MineQuickRow(checkin: $r.checkin, invite: $r.invite, fav: $r.fav)
+                                .padding(.top, 10)
+                            MineRecentRow(names: recent) { recent = [] }
+                                .padding(.top, 12)
+                            MineGrid(fav: $r.fav, cloud: $r.cloud, device: $r.device, settings: $r.settings)
+                                .padding(.top, 12)
+                            MinePlaylists { r.fav = true }
+                                .padding(.top, 12)
+                        }
+                        .padding(.horizontal, 12)
                     }
-                    .padding(.horizontal, 16)
+                    MineSettingsRow { r.settings = true }
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+                        .padding(.bottom, 6)
                 }
             }
             .navigationBarHidden(true)
@@ -100,8 +106,6 @@ struct MineView: View {
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }
-
-    static let demoRecent = ["夜航星", "坠落星空（女版）", "慢冷", "晚风"]
 
     private var links: some View {
         VStack {
@@ -121,10 +125,53 @@ struct MineMemberCard: View {
     let onSettings: () -> Void
     var body: some View {
         VStack(spacing: 0) {
-            topRow
-            progressText
-            progressBar
-            statsRow
+            HStack(spacing: 11) {
+                Text(String(nickname.prefix(1)))
+                    .font(.system(size: 18, weight: .heavy)).foregroundColor(.white)
+                    .frame(width: 48, height: 48)
+                    .background(Circle().fill(LinearGradient(colors: [MineTheme.gold, MineTheme.pink],
+                                                            startPoint: .topLeading, endPoint: .bottomTrailing)))
+                    .overlay(Circle().stroke(MineTheme.gold.opacity(0.6), lineWidth: 1.5))
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(nickname).font(.system(size: 16, weight: .heavy))
+                        Text("SVIP").font(.system(size: 8.5, weight: .black))
+                            .foregroundColor(MineTheme.gold)
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(RoundedRectangle(cornerRadius: 4).fill(MineTheme.gold.opacity(0.18)))
+                    }
+                    Text("屿声音乐会员").font(.system(size: 11)).foregroundColor(.gray)
+                }
+                Spacer(minLength: 8)
+                Button(action: onSettings) {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 13)).foregroundColor(.white.opacity(0.75))
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+            }
+            HStack {
+                Text("本月会员进度").font(.system(size: 10)).foregroundColor(.white.opacity(0.45))
+                Spacer()
+                Text("还剩 27 天").font(.system(size: 10, weight: .bold)).foregroundColor(MineTheme.gold)
+            }
+            .padding(.top, 10)
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.10))
+                    Capsule().fill(LinearGradient(colors: [MineTheme.gold, Color(red: 1, green: 0.69, blue: 0.12)],
+                                                 startPoint: .leading, endPoint: .trailing))
+                        .frame(width: g.size.width * 0.62)
+                }
+            }
+            .frame(height: 4).padding(.top, 5)
+            HStack(spacing: 7) {
+                MineStatCell(title: "收藏", value: "12")
+                MineStatCell(title: "歌单", value: "2")
+                MineStatCell(title: "积分", value: "1280")
+                MineStatCell(title: "缓存", value: "0M")
+            }
+            .padding(.top, 10)
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 20)
@@ -133,65 +180,6 @@ struct MineMemberCard: View {
                                  startPoint: .topLeading, endPoint: .bottomTrailing)))
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(MineTheme.gold.opacity(0.34), lineWidth: 1))
         .padding(.top, 8)
-    }
-    private var topRow: some View {
-        HStack(spacing: 11) {
-            Text(String(nickname.prefix(1)))
-                .font(.system(size: 18, weight: .heavy))
-                .foregroundColor(.white)
-                .frame(width: 48, height: 48)
-                .background(Circle().fill(LinearGradient(colors: [MineTheme.gold, MineTheme.pink],
-                                                        startPoint: .topLeading, endPoint: .bottomTrailing)))
-                .overlay(Circle().stroke(MineTheme.gold.opacity(0.6), lineWidth: 1.5))
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(nickname).font(.system(size: 16, weight: .heavy))
-                    Text("SVIP")
-                        .font(.system(size: 8.5, weight: .black))
-                        .foregroundColor(MineTheme.gold)
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(MineTheme.gold.opacity(0.18)))
-                }
-                Text("屿声音乐会员").font(.system(size: 11)).foregroundColor(.gray)
-            }
-            Spacer(minLength: 8)
-            Button(action: onSettings) {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.75))
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color.white.opacity(0.08)))
-            }
-        }
-    }
-    private var progressText: some View {
-        HStack {
-            Text("本月会员进度").font(.system(size: 10)).foregroundColor(.white.opacity(0.45))
-            Spacer()
-            Text("还剩 27 天").font(.system(size: 10, weight: .bold)).foregroundColor(MineTheme.gold)
-        }
-        .padding(.top, 11)
-    }
-    private var progressBar: some View {
-        GeometryReader { g in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.10))
-                Capsule()
-                    .fill(LinearGradient(colors: [MineTheme.gold, Color(red: 1, green: 0.69, blue: 0.12)],
-                                         startPoint: .leading, endPoint: .trailing))
-                    .frame(width: g.size.width * 0.62)
-            }
-        }
-        .frame(height: 4).padding(.top, 5)
-    }
-    private var statsRow: some View {
-        HStack(spacing: 7) {
-            MineStatCell(title: "收藏", value: "12")
-            MineStatCell(title: "歌单", value: "2")
-            MineStatCell(title: "积分", value: "1280")
-            MineStatCell(title: "缓存", value: "0M")
-        }
-        .padding(.top, 10)
     }
 }
 
@@ -242,26 +230,36 @@ struct MinePill: View {
 
 struct MineRecentRow: View {
     let names: [String]
+    let onClear: () -> Void
+
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
                 Text("最近播放").font(.system(size: 13, weight: .bold)).foregroundColor(.white.opacity(0.62))
                 Spacer()
-                Text("清空").font(.system(size: 11)).foregroundColor(.gray)
+                Button(action: onClear) {
+                    Text("清空").font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(MineTheme.pink)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Capsule().fill(Color.white.opacity(0.06)))
+                }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 9) {
-                    ForEach(Array(names.enumerated()), id: \.offset) { _, name in
-                        VStack(alignment: .leading, spacing: 5) {
-                            RoundedRectangle(cornerRadius: 13)
-                                .fill(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
-                                                              Color(red: 1, green: 0.54, blue: 0)],
-                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 70, height: 70)
-                            Text(name)
-                                .font(.system(size: 10, weight: .semibold))
-                                .lineLimit(1)
-                                .frame(width: 70, alignment: .leading)
+            if names.isEmpty {
+                Text("还没有播放记录").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.3))
+                    .padding(.vertical, 8)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 9) {
+                        ForEach(Array(names.enumerated()), id: \.offset) { _, name in
+                            VStack(alignment: .leading, spacing: 5) {
+                                RoundedRectangle(cornerRadius: 13)
+                                    .fill(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
+                                                                  Color(red: 1, green: 0.54, blue: 0)],
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 70, height: 70)
+                                Text(name).font(.system(size: 10, weight: .semibold))
+                                    .lineLimit(1).frame(width: 70, alignment: .leading)
+                            }
                         }
                     }
                 }
@@ -294,8 +292,7 @@ struct MineTile: View {
         Button(action: onTap) {
             VStack(spacing: 5) {
                 Image(systemName: icon).font(.system(size: 16)).foregroundColor(color)
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold))
+                Text(title).font(.system(size: 10, weight: .semibold))
                     .foregroundColor(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
             }
@@ -352,8 +349,7 @@ struct MineSettingsRow: View {
         Button(action: onTap) {
             HStack(spacing: 11) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.7))
+                    .font(.system(size: 13)).foregroundColor(.white.opacity(0.7))
                     .frame(width: 30, height: 30)
                     .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.10)))
                 VStack(alignment: .leading, spacing: 1) {
