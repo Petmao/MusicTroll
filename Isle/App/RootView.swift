@@ -1,5 +1,16 @@
 import SwiftUI
 
+final class MineRouter: ObservableObject {
+    @Published var settings = false
+    @Published var card = false
+    @Published var checkin = false
+    @Published var invite = false
+    @Published var fav = false
+    @Published var cloud = false
+    @Published var lyric = false
+    @Published var device = false
+}
+
 struct RootView: View {
     @State private var tab = 0
     var body: some View {
@@ -37,7 +48,7 @@ struct RootView: View {
     private func item(_ idx: Int, _ icon: String, _ title: String) -> some View {
         Button { tab = idx } label: {
             VStack(spacing: 3) {
-                Image(systemName: icon).font(.system(size: 18, weight: .regular))
+                Image(systemName: icon).font(.system(size: 18))
                 Text(title).font(.system(size: 9.5))
             }
             .foregroundColor(tab == idx ? Color(red: 1, green: 0.37, blue: 0.62) : Color(white: 0.38))
@@ -47,12 +58,22 @@ struct RootView: View {
     }
 }
 
+struct MinePlaylist: Identifiable {
+    let id = UUID()
+    let name: String
+    let subtitle: String
+    let count: Int
+}
+
 struct MineView: View {
     @EnvironmentObject var auth: AuthStore
     @StateObject private var engine = MusicEngine.shared
-    @State private var showSettings = false
-    @State private var goCard = false, goCheckin = false, goInvite = false
-    @State private var goFav = false, goCloud = false, goLyric = false, goDevice = false
+    @StateObject private var r = MineRouter()
+
+    private let playlists = [
+        MinePlaylist(name: "我喜欢的音乐", subtitle: "收藏 · 每天更新", count: 128),
+        MinePlaylist(name: "夜跑 DJ 循环", subtitle: "自定义 · 3.2 小时", count: 46)
+    ]
 
     var body: some View {
         NavigationView {
@@ -74,20 +95,23 @@ struct MineView: View {
                 }
             }
             .navigationBarHidden(true)
-            .background(
-                Group {
-                    NavigationLink(destination: SettingsView(), isActive: $showSettings) { EmptyView() }
-                    NavigationLink(destination: CardRedeemView(), isActive: $goCard) { EmptyView() }
-                    NavigationLink(destination: CheckinView(), isActive: $goCheckin) { EmptyView() }
-                    NavigationLink(destination: InviteView(), isActive: $goInvite) { EmptyView() }
-                    NavigationLink(destination: LibraryView(), isActive: $goFav) { EmptyView() }
-                    NavigationLink(destination: CloudSyncView(), isActive: $goCloud) { EmptyView() }
-                    NavigationLink(destination: LyricsView(), isActive: $goLyric) { EmptyView() }
-                    NavigationLink(destination: DeviceView(), isActive: $goDevice) { EmptyView() }
-                }
-            )
+            .background(links)
         }
         .navigationViewStyle(StackNavigationViewStyle())
+    }
+
+    private var links: some View {
+        VStack {
+            NavigationLink(destination: SettingsView(), isActive: $r.settings) { EmptyView() }
+            NavigationLink(destination: CardRedeemView(), isActive: $r.card) { EmptyView() }
+            NavigationLink(destination: CheckinView(), isActive: $r.checkin) { EmptyView() }
+            NavigationLink(destination: InviteView(), isActive: $r.invite) { EmptyView() }
+            NavigationLink(destination: LibraryView(), isActive: $r.fav) { EmptyView() }
+            NavigationLink(destination: CloudSyncView(), isActive: $r.cloud) { EmptyView() }
+            NavigationLink(destination: LyricsView(), isActive: $r.lyric) { EmptyView() }
+            NavigationLink(destination: DeviceView(), isActive: $r.device) { EmptyView() }
+        }
+        .hidden()
     }
 
     private var memberCard: some View {
@@ -103,7 +127,7 @@ struct MineView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(auth.user?.nickname ?? "未登录").font(.system(size: 16, weight: .heavy))
-                        Text(auth.user?.vipLevel.uppercased() ?? "SVIP")
+                        Text((auth.user?.vipLevel ?? "SVIP").uppercased())
                             .font(.system(size: 8.5, weight: .black))
                             .foregroundColor(Color(red: 1, green: 0.85, blue: 0.44))
                             .padding(.horizontal, 5).padding(.vertical, 2)
@@ -113,7 +137,7 @@ struct MineView: View {
                     Text("账号 \(auth.user?.username ?? "—")").font(.system(size: 11)).foregroundColor(.gray)
                 }
                 Spacer(minLength: 8)
-                Button { showSettings = true } label: {
+                Button { r.settings = true } label: {
                     Image(systemName: "gearshape.fill").font(.system(size: 13))
                         .foregroundColor(.white.opacity(0.75))
                         .frame(width: 30, height: 30)
@@ -124,7 +148,7 @@ struct MineView: View {
             HStack {
                 Text("本月会员进度").font(.system(size: 10)).foregroundColor(.white.opacity(0.45))
                 Spacer()
-                Text(auth.user?.vipDaysText ?? "还剩 27 天").font(.system(size: 10, weight: .bold))
+                Text("还剩 27 天").font(.system(size: 10, weight: .bold))
                     .foregroundColor(Color(red: 1, green: 0.85, blue: 0.44))
             }
             .padding(.top, 11)
@@ -141,17 +165,17 @@ struct MineView: View {
             .frame(height: 4).padding(.top, 5)
 
             HStack(spacing: 7) {
-                stat("收藏", "\(auth.stats.favCount)")
-                stat("歌单", "\(auth.stats.playlistCount)")
+                stat("收藏", "\(engine.recent.count)")
+                stat("歌单", "\(playlists.count)")
                 stat("积分", "\(auth.user?.points ?? 0)")
-                stat("缓存", "\(auth.stats.cacheMB)M")
+                stat("缓存", "0M")
             }
             .padding(.top, 10)
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 20)
-            .fill(LinearGradient(colors: [Color(red: 0.15, green: 0.13, blue: 0.10).opacity(0.95),
-                                          Color(red: 0.07, green: 0.06, blue: 0.09).opacity(0.96)],
+            .fill(LinearGradient(colors: [Color(red: 0.15, green: 0.13, blue: 0.10),
+                                          Color(red: 0.07, green: 0.06, blue: 0.09)],
                                  startPoint: .topLeading, endPoint: .bottomTrailing)))
         .overlay(RoundedRectangle(cornerRadius: 20)
             .stroke(Color(red: 1, green: 0.82, blue: 0.44).opacity(0.34), lineWidth: 1))
@@ -171,9 +195,9 @@ struct MineView: View {
 
     private var quickRow: some View {
         HStack(spacing: 8) {
-            pill("ticket.fill", "卡密", .orange) { goCard = true }
-            pill("calendar", "签到", Color(red: 0.72, green: 0.65, blue: 1)) { goCheckin = true }
-            pill("person.2.fill", "邀请", Color(red: 0.30, green: 0.90, blue: 0.66)) { goInvite = true }
+            pill("ticket.fill", "卡密", .orange) { r.card = true }
+            pill("calendar", "签到", Color(red: 0.72, green: 0.65, blue: 1)) { r.checkin = true }
+            pill("person.2.fill", "邀请", Color(red: 0.30, green: 0.90, blue: 0.66)) { r.invite = true }
         }
     }
 
@@ -196,9 +220,7 @@ struct MineView: View {
             HStack {
                 Text("最近播放").font(.system(size: 13, weight: .bold)).foregroundColor(.white.opacity(0.62))
                 Spacer()
-                Button { engine.clearRecent() } label: {
-                    Text("清空").font(.system(size: 11)).foregroundColor(.gray)
-                }
+                Text("清空").font(.system(size: 11)).foregroundColor(.gray)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 9) {
@@ -225,10 +247,10 @@ struct MineView: View {
 
     private var gridRow: some View {
         HStack(spacing: 8) {
-            tile("heart.fill", "收藏\n与歌单", Color(red: 1, green: 0.37, blue: 0.62)) { goFav = true }
-            tile("icloud.fill", "云\n同步", Color(red: 0.49, green: 0.65, blue: 1)) { goCloud = true }
-            tile("quote.bubble", "全屏\n歌词", Color(red: 0.79, green: 0.65, blue: 1)) { goLyric = true }
-            tile("iphone", "设备\n管理", Color(red: 0.61, green: 0.55, blue: 1)) { goDevice = true }
+            tile("heart.fill", "收藏\n与歌单", Color(red: 1, green: 0.37, blue: 0.62)) { r.fav = true }
+            tile("icloud.fill", "云\n同步", Color(red: 0.49, green: 0.65, blue: 1)) { r.cloud = true }
+            tile("quote.bubble", "全屏\n歌词", Color(red: 0.79, green: 0.65, blue: 1)) { r.lyric = true }
+            tile("iphone", "设备\n管理", Color(red: 0.61, green: 0.55, blue: 1)) { r.device = true }
         }
     }
 
@@ -251,16 +273,18 @@ struct MineView: View {
             HStack {
                 Text("我的歌单").font(.system(size: 13, weight: .bold)).foregroundColor(.white.opacity(0.62))
                 Spacer()
-                Button { goFav = true } label: {
+                Button { r.fav = true } label: {
                     Text("＋ 新建").font(.system(size: 11)).foregroundColor(Color(red: 1, green: 0.56, blue: 0.71))
                 }
             }
             HStack(spacing: 9) {
-                ForEach(auth.playlists.prefix(2)) { p in
-                    Button { goFav = true } label: {
+                ForEach(playlists) { p in
+                    Button { r.fav = true } label: {
                         VStack(alignment: .leading, spacing: 5) {
                             RoundedRectangle(cornerRadius: 13)
-                                .fill(LinearGradient(colors: [p.c1, p.c2], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .fill(LinearGradient(colors: [Color(red: 0.48, green: 0.36, blue: 1),
+                                                              Color(red: 0, green: 0.83, blue: 1)],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
                                 .frame(height: 86)
                                 .overlay(Text("\(p.count) 首").font(.system(size: 9, weight: .bold))
                                             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -269,6 +293,7 @@ struct MineView: View {
                             Text(p.name).font(.system(size: 11.5, weight: .bold)).lineLimit(1)
                             Text(p.subtitle).font(.system(size: 9)).foregroundColor(.gray).lineLimit(1)
                         }
+                        .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -277,7 +302,7 @@ struct MineView: View {
     }
 
     private var settingsRow: some View {
-        Button { showSettings = true } label: {
+        Button { r.settings = true } label: {
             HStack(spacing: 11) {
                 Image(systemName: "gearshape.fill").font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.7))
