@@ -6,22 +6,29 @@ struct SettingsView: View {
     @AppStorage("lang") private var lang = "zh"
     @AppStorage("preciseSeek") private var preciseSeek = false
     @State private var showLogout = false
+    @State private var musicURL = ""
+    @State private var videoURL = ""
+    @State private var loadingSources = true
 
     var body: some View {
         ZStack {
-            Color(red: 0.04, green: 0.04, blue: 0.06).ignoresSafeArea()
+            MineTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 9) {
+                VStack(spacing: 10) {
+                    gradientBanner
+                    sources
                     appearance
                     audio
-                    sources
                     logoutCard
                 }
-                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 30)
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                .padding(.bottom, 30)
             }
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await loadSources() }
         .alert("退出登录", isPresented: $showLogout) {
             Button("取消", role: .cancel) {}
             Button("退出", role: .destructive) { auth.logout() }
@@ -30,10 +37,76 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: 渐变长条
+    private var gradientBanner: some View {
+        ZStack(alignment: .bottomLeading) {
+            RoundedRectangle(cornerRadius: 18)
+                .fill(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
+                                              Color(red: 1, green: 0.48, blue: 0.18),
+                                              Color(red: 0.48, green: 0.36, blue: 1)],
+                                     startPoint: .leading, endPoint: .trailing))
+                .frame(height: 92)
+                .overlay(
+                    LinearGradient(colors: [.white.opacity(0.35), .clear],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                )
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("屿声音乐").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                    Text("设置 · 音源 · 播放").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.75))
+                }
+                Spacer()
+                Text(Config.version)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .foregroundColor(.white.opacity(0.85))
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Capsule().fill(Color.black.opacity(0.25)))
+            }
+            .padding(14)
+        }
+    }
+
     private func label(_ t: String) -> some View {
         Text(t).font(.system(size: 11, weight: .bold)).tracking(1)
             .foregroundColor(.white.opacity(0.5))
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var sources: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            label("源地址").padding(.bottom, 6)
+            NavigationLink(destination: MusicSourceSettingsView()) {
+                row("音乐音源", musicURL.isEmpty ? (loadingSources ? "读取中…" : "未配置，点此添加") : musicURL)
+            }
+            Divider().background(Color.white.opacity(0.06))
+            NavigationLink(destination: VideoSourceSettingsView()) {
+                row("视频源", videoURL.isEmpty ? (loadingSources ? "读取中…" : "未配置，点此添加") : videoURL)
+            }
+            Divider().background(Color.white.opacity(0.06))
+            NavigationLink(destination: DeviceView()) {
+                row("设备管理", "查看已绑定设备 / 解绑")
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
+    }
+
+    private func row(_ title: String, _ sub: String) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                Text(sub)
+                    .font(.system(size: 10.5))
+                    .foregroundColor(sub.hasPrefix("http") ? Color(red: 0.55, green: 0.85, blue: 1) : .gray)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(.white.opacity(0.3))
+        }
+        .padding(.vertical, 9)
     }
 
     private var appearance: some View {
@@ -79,7 +152,7 @@ struct SettingsView: View {
                 }
                 Spacer()
                 Toggle("", isOn: $preciseSeek).labelsHidden()
-                    .toggleStyle(SwitchToggleStyle(tint: Color(red: 1, green: 0.37, blue: 0.62)))
+                    .toggleStyle(SwitchToggleStyle(tint: MineTheme.pink))
             }
             Text("部分 FLAC 在快进后可能出现音频与歌词不同步，可在 设置 → 音频设置 → 精确跳转 中开启改善。默认关闭，切换歌曲后生效；开启后部分音频需完整加载，播放前等待更久。")
                 .font(.system(size: 9.5)).lineSpacing(3)
@@ -93,38 +166,6 @@ struct SettingsView: View {
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
     }
 
-    private var sources: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            label("源与同步").padding(.bottom, 4)
-            NavigationLink(destination: MusicSourceSettingsView()) {
-                row("音乐音源", "脚本 / 音质 / 优先级")
-            }
-            Divider().background(Color.white.opacity(0.06))
-            NavigationLink(destination: VideoSourceSettingsView()) {
-                row("视频源", "养眼频道脚本地址")
-            }
-            Divider().background(Color.white.opacity(0.06))
-            NavigationLink(destination: DeviceView()) {
-                row("设备管理", "当前 / 历史设备")
-            }
-        }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
-    }
-
-    private func row(_ title: String, _ sub: String) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
-                Text(sub).font(.system(size: 11)).foregroundColor(.gray)
-            }
-            Spacer()
-            Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(.white.opacity(0.3))
-        }
-        .padding(.vertical, 9)
-    }
-
     private var logoutCard: some View {
         Button { showLogout = true } label: {
             VStack(spacing: 5) {
@@ -132,15 +173,26 @@ struct SettingsView: View {
                     Image(systemName: "rectangle.portrait.and.arrow.right").font(.system(size: 13))
                     Text("退出登录").font(.system(size: 13, weight: .bold))
                 }
-                .foregroundColor(Color(red: 1, green: 0.37, blue: 0.62))
+                .foregroundColor(MineTheme.pink)
                 Text("退出后需重新登录，本地加密音乐保留")
                     .font(.system(size: 9.5)).foregroundColor(.white.opacity(0.35))
             }
             .frame(maxWidth: .infinity).padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: 18).fill(Color(red: 1, green: 0.18, blue: 0.47).opacity(0.07)))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(red: 1, green: 0.37, blue: 0.62).opacity(0.28), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(MineTheme.pink.opacity(0.28), lineWidth: 1))
         }
         .buttonStyle(PlainButtonStyle())
         .padding(.top, 4)
+    }
+
+    private func loadSources() async {
+        loadingSources = true
+        defer { loadingSources = false }
+        if let m = try? await APIClient.shared.sources(kind: "music"), let f = m.first {
+            musicURL = f.url
+        }
+        if let v = try? await APIClient.shared.sources(kind: "video"), let f = v.first {
+            videoURL = f.url
+        }
     }
 }
