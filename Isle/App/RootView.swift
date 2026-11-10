@@ -39,8 +39,7 @@ struct RootView: View {
             item(2, "headphones", "播放器")
             item(3, "person", "我的")
         }
-        .padding(.top, 9)
-        .padding(.bottom, 6)
+        .padding(.top, 9).padding(.bottom, 6)
         .background(Color(red: 0.04, green: 0.04, blue: 0.06))
         .overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 0.5), alignment: .top)
     }
@@ -67,7 +66,7 @@ struct MinePlaylist: Identifiable {
 
 struct MineView: View {
     @EnvironmentObject var auth: AuthStore
-    @StateObject private var engine = MusicEngine.shared
+    @ObservedObject private var engine = MusicEngine.shared
     @StateObject private var r = MineRouter()
 
     private let playlists = [
@@ -87,7 +86,7 @@ struct MineView: View {
                         gridRow.padding(.top, 14)
                         playlistRow.padding(.top, 14)
                         settingsRow.padding(.top, 14)
-                        Text("屿声音乐 \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.9.2")")
+                        Text("屿声音乐 1.9.2")
                             .font(.system(size: 9.5)).foregroundColor(.white.opacity(0.2))
                             .padding(.top, 14).padding(.bottom, 24)
                     }
@@ -132,7 +131,6 @@ struct MineView: View {
                             .foregroundColor(Color(red: 1, green: 0.85, blue: 0.44))
                             .padding(.horizontal, 5).padding(.vertical, 2)
                             .background(RoundedRectangle(cornerRadius: 4).fill(Color(red: 1, green: 0.82, blue: 0.44).opacity(0.18)))
-                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(red: 1, green: 0.82, blue: 0.44).opacity(0.5), lineWidth: 0.7))
                     }
                     Text("账号 \(auth.user?.username ?? "—")").font(.system(size: 11)).foregroundColor(.gray)
                 }
@@ -144,7 +142,6 @@ struct MineView: View {
                         .background(Circle().fill(Color.white.opacity(0.08)))
                 }
             }
-
             HStack {
                 Text("本月会员进度").font(.system(size: 10)).foregroundColor(.white.opacity(0.45))
                 Spacer()
@@ -152,7 +149,6 @@ struct MineView: View {
                     .foregroundColor(Color(red: 1, green: 0.85, blue: 0.44))
             }
             .padding(.top, 11)
-
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.white.opacity(0.10))
@@ -163,7 +159,6 @@ struct MineView: View {
                 }
             }
             .frame(height: 4).padding(.top, 5)
-
             HStack(spacing: 7) {
                 stat("收藏", "\(engine.recent.count)")
                 stat("歌单", "\(playlists.count)")
@@ -187,10 +182,8 @@ struct MineView: View {
             Text(t).font(.system(size: 9)).foregroundColor(.white.opacity(0.45))
             Text(v).font(.system(size: 14, weight: .heavy))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity).padding(.vertical, 7)
         .background(RoundedRectangle(cornerRadius: 11).fill(Color.white.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color(red: 1, green: 0.82, blue: 0.44).opacity(0.14), lineWidth: 0.6))
     }
 
     private var quickRow: some View {
@@ -210,7 +203,6 @@ struct MineView: View {
             .foregroundColor(color)
             .frame(maxWidth: .infinity).padding(.vertical, 11)
             .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -224,8 +216,8 @@ struct MineView: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 9) {
-                    ForEach(engine.recent.prefix(8)) { s in
-                        Button { engine.play(song: s) } label: {
+                    ForEach(Array(engine.recent.prefix(8)), id: \.id) { s in
+                        Button { engine.play(keyword: s.name) } label: {
                             VStack(alignment: .leading, spacing: 5) {
                                 RoundedRectangle(cornerRadius: 13)
                                     .fill(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
@@ -263,7 +255,6 @@ struct MineView: View {
             }
             .frame(maxWidth: .infinity).padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -317,7 +308,6 @@ struct MineView: View {
             }
             .padding(.vertical, 9).padding(.horizontal, 11)
             .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
         }
         .buttonStyle(PlainButtonStyle())
     }
