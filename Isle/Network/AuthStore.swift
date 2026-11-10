@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 @MainActor
 final class AuthStore: ObservableObject {
@@ -13,71 +14,80 @@ final class AuthStore: ObservableObject {
 
     func bootstrap() async {
         guard Keychain.get("token") != nil else { return }
-        do { let (u, e) = try await APIClient.shared.me(); user = u; ent = e }
-        catch { Keychain.del("token") }
+        do {
+            let (u, e) = try await APIClient.shared.me()
+            self.user = u; self.ent = e
+        } catch {
+            Keychain.del("token")
+        }
     }
 
     func login(_ account: String, _ password: String) async {
-        await run {
+        self.loading = true; self.error = nil
+        do {
             let r = try await APIClient.shared.login(account: account, password: password)
-            Keychain.set("token", r.token); user = r.user; ent = r.entitlements
-        }
+            Keychain.set("token", r.token)
+            self.user = r.user; self.ent = r.entitlements
+        } catch { self.error = Self.friendly(error) }
+        self.loading = false
     }
 
     func register(account: String, nickname: String, password: String, phone: String?, invite: String?) async {
-        await run {
-            let r = try await APIClient.shared.register(account: account, nickname: nickname, password: password, phone: phone, inviteCode: invite)
-            Keychain.set("token", r.token); user = r.user; ent = r.entitlements
-        }
+        self.loading = true; self.error = nil
+        do {
+            let r = try await APIClient.shared.register(account: account, nickname: nickname,
+                                                       password: password, phone: phone, inviteCode: invite)
+            Keychain.set("token", r.token)
+            self.user = r.user; self.ent = r.entitlements
+        } catch { self.error = Self.friendly(error) }
+        self.loading = false
     }
 
     func redeem(_ code: String) async {
-        await run {
-            let (u, e) = try await APIClient.shared.redeem(code); user = u; ent = e
-        }
+        guard !code.isEmpty else { return }
+        self.error = nil
+        do {
+            let (u, e) = try await APIClient.shared.redeem(code)
+            self.user = u; self.ent = e
+        } catch { self.error = Self.friendly(error) }
     }
 
     func exchange(goods: String) async {
-        await run {
-            let (u, e) = try await APIClient.shared.exchange(goods: goods); user = u; ent = e
-        }
+        do {
+            let (u, e) = try await APIClient.shared.exchange(goods: goods)
+            self.user = u; self.ent = e
+        } catch { self.error = Self.friendly(error) }
     }
 
     func refresh() async {
-        if let (u, e) = try? await APIClient.shared.me() { user = u; ent = e }
+        if let (u, e) = try? await APIClient.shared.me() { self.user = u; self.ent = e }
     }
 
     func uploadAvatar(_ jpeg: Data) async {
         do {
-            let path = try await APIClient.shared.uploadAvatar(jpeg)
-            if let u = user { user = IsleUser(id: u.id, account: u.account, nickname: u.nickname, avatar: path, role: u.role, roleExpireAt: u.roleExpireAt, phoneMasked: u.phoneMasked, status: u.status, inviteCode: u.inviteCode, points: u.points) }
+            _ = try await APIClient.shared.uploadAvatar(jpeg)
+            await self.refresh()
         } catch { self.error = "头像上传失败" }
     }
 
     func resetAvatar() async {
         try? await APIClient.shared.resetAvatar()
-        await refresh()
+        await self.refresh()
     }
 
     func logout() {
         Keychain.del("token")
         Keychain.del("contentKey")
-        user = nil
-        ent = .none
+        self.user = nil
+        self.ent = .none
     }
 
-    private func run(_ block: @escaping () async throws -> Void) async {
-        loading = true; error = nil
-        do { try await block() }
-        catch APIError.http(let m) { error = friendly(m) }
-        catch { error = "网络异常，请检查 ys.irepo.cn 是否可达" }
-        loading = false
-    }
-
-    private func friendly(_ code: String) -> String {
+    private static func friendly(_ e: Error) -> String {
+        guard case APIError.http(let code) = e else { return "网络异常，请检查服务器是否可达" }
         switch code {
         case "bad_credentials": return "账号或密码不对"
         case "account_taken": return "这个账号已被占用"
+        case "bad_account": return "账号需字母开头、4–16 位字母或数字"
         case "need_vip": return "需要 VIP 会员"
         case "need_svip": return "需要 SVIP 会员"
         case "device_limit": return "设备数已满，请先解绑"
@@ -103,7 +113,9 @@ enum Keychain {
         SecItemAdd(add as CFDictionary, nil)
     }
     static func get(_ key: String) -> String? {
-        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: key, kSecReturnData as String: true]
+        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                kSecAttrAccount as String: key,
+                                kSecReturnData as String: true]
         var out: AnyObject?
         guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return nil }
         return String(data: d, encoding: .utf8)
