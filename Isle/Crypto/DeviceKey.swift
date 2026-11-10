@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// 每设备内容密钥：登录 VIP 后向服务端领取，存 Keychain（本机专属，不随备份迁移）
 enum DeviceKey {
