@@ -39,8 +39,15 @@ final class APIClient {
         return URLSession(configuration: c)
     }()
 
+    /// 关键：query 必须原样保留，不能走 appendingPathComponent（会把 ? 转成 %3F 导致 404）
+    private func buildURL(_ path: String) -> URL? {
+        let p = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        return URL(string: p, relativeTo: baseURL)?.absoluteURL
+    }
+
     private func raw(_ path: String, method: String = "GET", body: Any? = nil) async throws -> Data {
-        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        guard let url = buildURL(path) else { throw APIError.http("地址无效") }
+        var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let t = Keychain.get("token") { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
@@ -115,7 +122,10 @@ final class APIClient {
     func registerDevice(_ id: String, name: String) async throws -> DeviceKeyResp {
         try await post("/api/device/register", body: ["deviceId": id, "name": name])
     }
-    func deviceList(_ id: String) async throws -> DeviceListResp { try await get("/api/device/list?deviceId=\(id)") }
+    func deviceList(_ id: String) async throws -> DeviceListResp {
+        let q = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id
+        return try await get("/api/device/list?deviceId=\(q)")
+    }
     func unbindDevice(_ id: String) async throws {
         struct R: Decodable { let graceUntil: Int? }
         let _: R = try await post("/api/device/unbind", body: ["deviceId": id, "reason": "user"])
@@ -149,7 +159,8 @@ final class APIClient {
         let _: R = try await post("/api/cloud/progress", body: ["trackKey": trackKey, "positionMs": positionMs, "durationMs": durationMs])
     }
     func progress(trackKey: String) async throws -> ProgressResp? {
-        try? await get("/api/cloud/progress/\(trackKey)")
+        let q = trackKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trackKey
+        return try? await get("/api/cloud/progress/\(q)")
     }
 }
 
