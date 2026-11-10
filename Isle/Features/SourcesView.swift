@@ -6,21 +6,25 @@ struct SourcesView: View {
     @EnvironmentObject var auth: AuthStore
     @State private var rows: [SourceItem] = []
     @State private var loading = true
-    @State private var error: String?
+    @State private var loadError: String?
 
-    private var title: String { kind == "music" ? "音乐音源" : "视频源" }
+    private var pageTitle: String { kind == "music" ? "音乐音源" : "视频源" }
 
     var body: some View {
         List {
             if loading {
-                HStack { ProgressView(); Text("正在拉取…").foregroundColor(.secondary) }
-            } else if let error = error {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("正在拉取…").foregroundColor(.secondary)
+                }
+            } else if let msg = loadError {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(error).foregroundColor(.pink)
+                    Text(msg).foregroundColor(.pink)
                     Button("重试") { Task { await load() } }
                 }
             } else if rows.isEmpty {
-                Text("后台还没有配置\(title)，请到管理后台添加").foregroundColor(.secondary)
+                Text("后台还没有配置\(pageTitle)，请到管理后台添加")
+                    .foregroundColor(.secondary)
             } else {
                 ForEach(rows) { s in
                     HStack(spacing: 10) {
@@ -29,9 +33,13 @@ struct SourcesView: View {
                             .frame(width: 7, height: 7)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(s.name).font(.system(size: 14, weight: .semibold))
-                            Text(s.url).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1)
+                            Text(s.url)
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
                             if let n = s.note, !n.isEmpty {
-                                Text(n).font(.system(size: 10)).foregroundColor(.secondary.opacity(0.7))
+                                Text(n).font(.system(size: 10))
+                                    .foregroundColor(.secondary.opacity(0.7))
                             }
                         }
                         Spacer()
@@ -44,10 +52,12 @@ struct SourcesView: View {
             }
         }
         .listStyle(InsetGroupedListStyle())
-        .navigationTitle(title)
-        .toolbar { ToolbarItem(placement: .navigationBarTrailing) {
-            Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") }
-        } }
+        .navigationTitle(pageTitle)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") }
+            }
+        }
         .task { await load() }
     }
 
@@ -57,14 +67,19 @@ struct SourcesView: View {
     }
 
     private func load() async {
-        loading = true; error = nil
-        do { rows = try await APIClient.shared.sources(kind: kind) }
-        catch APIError.http(let code) {
-            error = code == "need_svip" ? "需要 SVIP 才能使用视频源"
-                  : code == "need_vip"  ? "需要 VIP 才能使用音源"
-                  : "拉取失败：\(code)"
+        loading = true
+        loadError = nil
+        do {
+            rows = try await APIClient.shared.sources(kind: kind)
+        } catch let APIError.http(code) {
+            switch code {
+            case "need_svip": loadError = "需要 SVIP 才能使用视频源"
+            case "need_vip": loadError = "需要 VIP 才能使用音源"
+            default: loadError = "拉取失败：\(code)"
+            }
+        } catch {
+            loadError = "网络异常，检查服务器是否可达"
         }
-        catch { error = "网络异常" }
         loading = false
     }
 }
