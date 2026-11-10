@@ -1,35 +1,55 @@
 import SwiftUI
 
 struct VideoSourceSettingsView: View {
-    @State private var address = ""
-    @State private var raw: [String: Any] = [:]
+    @State private var rows: [SourceItem] = []
     @State private var loading = false
-    @State private var message: String?
-    @State private var ok = false
+    @State private var errorText: String?
 
     var body: some View {
         ZStack {
-            Color(red: 0.04, green: 0.04, blue: 0.06).ignoresSafeArea()
+            MineTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 10) {
-                    card
-                    if let message { banner(message) }
-                    Button { Task { await load() } } label: {
-                        HStack(spacing: 6) {
-                            if loading { ProgressView().scaleEffect(0.7) }
-                            Text(loading ? "正在拉取…" : "重新拉取")
-                                .font(.system(size: 13, weight: .bold))
+                VStack(spacing: 9) {
+                    if loading {
+                        HStack(spacing: 8) {
+                            ProgressView().scaleEffect(0.8)
+                            Text("正在拉取…").font(.system(size: 12)).foregroundColor(.gray)
                         }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                    }
+                    if let errorText {
+                        HStack(spacing: 7) {
+                            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12))
+                            Text(errorText).font(.system(size: 11.5))
+                            Spacer()
+                        }
+                        .foregroundColor(Color(red: 1, green: 0.62, blue: 0.35))
+                        .padding(12)
                         .background(RoundedRectangle(cornerRadius: 14)
-                            .fill(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
-                                                          Color(red: 1, green: 0.48, blue: 0.18)],
-                                                 startPoint: .leading, endPoint: .trailing)))
+                            .fill(Color(red: 0.35, green: 0.18, blue: 0.10).opacity(0.35)))
+                    }
+                    if rows.isEmpty && errorText == nil && !loading {
+                        Text("后台还没有配置视频源")
+                            .font(.system(size: 12)).foregroundColor(.gray)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                    }
+                    ForEach(rows) { s in row(s) }
+                    Button { Task { await load() } } label: {
+                        Text(loading ? "拉取中…" : "重新拉取")
+                            .font(.system(size: 12.5, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .background(RoundedRectangle(cornerRadius: 14)
+                                .fill(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
+                                                              Color(red: 1, green: 0.48, blue: 0.18)],
+                                                     startPoint: .leading, endPoint: .trailing)))
                     }
                     .disabled(loading)
                     Text("视频源由后台 /admin.html → 视频源 配置，App 只负责拉取与播放。")
                         .font(.system(size: 9.5)).foregroundColor(.white.opacity(0.3))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 4)
                 }
                 .padding(.horizontal, 16).padding(.top, 12)
@@ -40,92 +60,86 @@ struct VideoSourceSettingsView: View {
         .task { await load() }
     }
 
-    private var card: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("当前地址").font(.system(size: 10, weight: .bold)).tracking(1)
-                .foregroundColor(.white.opacity(0.45))
-            Text(address.isEmpty ? "（空）" : address)
-                .font(.system(size: 12)).foregroundColor(.white.opacity(0.9))
-                .lineLimit(3).truncationMode(.middle)
-            ForEach(raw.keys.sorted(), id: \.self) { k in
-                if k != "url" {
-                    HStack {
-                        Text(k).font(.system(size: 10)).foregroundColor(.white.opacity(0.4))
-                        Spacer()
-                        Text("\(raw[k] ?? "")").font(.system(size: 10)).foregroundColor(.white.opacity(0.7))
-                    }
+    private func row(_ s: SourceItem) -> some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(dot(s))
+                .frame(width: 7, height: 7)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(s.name).font(.system(size: 13, weight: .semibold))
+                Text(s.url).font(.system(size: 10)).foregroundColor(.gray).lineLimit(2)
+                if let note = s.note, !note.isEmpty {
+                    Text(note).font(.system(size: 9.5)).foregroundColor(.white.opacity(0.35))
                 }
             }
+            Spacer(minLength: 6)
+            if let ms = s.lastMs {
+                Text("\(ms)ms").font(.system(size: 9.5)).foregroundColor(.white.opacity(0.4))
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
     }
 
-    private func banner(_ text: String) -> some View {
-        HStack(spacing: 7) {
-            Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .font(.system(size: 12))
-            Text(text).font(.system(size: 11)).lineLimit(4)
-            Spacer()
+    private func dot(_ s: SourceItem) -> Color {
+        switch s.healthy {
+        case .some(true): return Color(red: 0.30, green: 0.90, blue: 0.66)
+        case .some(false): return Color(red: 1, green: 0.45, blue: 0.35)
+        case .none: return Color(white: 0.45)
         }
-        .foregroundColor(ok ? Color(red: 0.30, green: 0.90, blue: 0.66) : Color(red: 1, green: 0.62, blue: 0.35))
-        .padding(11)
-        .background(RoundedRectangle(cornerRadius: 14)
-            .fill((ok ? Color(red: 0.10, green: 0.35, blue: 0.25) : Color(red: 0.35, green: 0.18, blue: 0.10)).opacity(0.25)))
     }
 
     private func load() async {
-        loading = true; message = nil
+        loading = true
+        errorText = nil
         defer { loading = false }
         do {
-            let obj = try await SourcesClient.shared.fetch(kind: "video")
-            raw = obj
-            address = (obj["url"] as? String) ?? (obj["address"] as? String) ?? ""
-            ok = true
-            message = "拉取成功"
+            rows = try await APIClient.shared.sources(kind: "video")
+            if rows.isEmpty { errorText = nil }
         } catch {
-            ok = false
-            message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            address = ""
+            errorText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            rows = []
         }
     }
 }
 
 struct MusicSourceSettingsView: View {
-    @State private var items: [[String: Any]] = []
+    @State private var rows: [SourceItem] = []
     @State private var loading = false
-    @State private var message: String?
+    @State private var errorText: String?
 
     var body: some View {
         ZStack {
-            Color(red: 0.04, green: 0.04, blue: 0.06).ignoresSafeArea()
+            MineTheme.bg.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 8) {
-                    if let message {
-                        Text(message).font(.system(size: 11))
+                    if let errorText {
+                        Text(errorText).font(.system(size: 11.5))
                             .foregroundColor(Color(red: 1, green: 0.62, blue: 0.35))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(12)
                     }
-                    ForEach(Array(items.enumerated()), id: \.offset) { _, it in
+                    ForEach(rows) { s in
                         HStack(spacing: 10) {
-                            Circle().fill(Color(red: 0.30, green: 0.90, blue: 0.66)).frame(width: 7, height: 7)
+                            Circle().fill(Color(red: 0.30, green: 0.90, blue: 0.66))
+                                .frame(width: 7, height: 7)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text((it["name"] as? String) ?? "未命名源")
-                                    .font(.system(size: 13, weight: .semibold))
-                                Text((it["url"] as? String) ?? "")
-                                    .font(.system(size: 10)).foregroundColor(.gray).lineLimit(1)
+                                Text(s.name).font(.system(size: 13, weight: .semibold))
+                                Text(s.url).font(.system(size: 10)).foregroundColor(.gray).lineLimit(2)
                             }
                             Spacer()
+                            if let ms = s.lastMs {
+                                Text("\(ms)ms").font(.system(size: 9.5)).foregroundColor(.white.opacity(0.4))
+                            }
                         }
-                        .padding(11)
+                        .padding(12)
                         .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.05)))
                         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08), lineWidth: 0.6))
                     }
                     Button { Task { await load() } } label: {
-                        Text(loading ? "正在拉取…" : "重新拉取")
+                        Text(loading ? "拉取中…" : "重新拉取")
                             .font(.system(size: 12.5, weight: .bold))
+                            .foregroundColor(.white)
                             .frame(maxWidth: .infinity).padding(.vertical, 11)
                             .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.08)))
                     }
@@ -140,15 +154,15 @@ struct MusicSourceSettingsView: View {
     }
 
     private func load() async {
-        loading = true; message = nil
+        loading = true
+        errorText = nil
         defer { loading = false }
         do {
-            let obj = try await SourcesClient.shared.fetch(kind: "music")
-            if let arr = obj["sources"] as? [[String: Any]] { items = arr }
-            else if obj["url"] != nil { items = [obj] }
-            if items.isEmpty { message = "后台未配置音乐源" }
+            rows = try await APIClient.shared.sources(kind: "music")
+            if rows.isEmpty { errorText = "后台未配置音乐源" }
         } catch {
-            message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            errorText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            rows = []
         }
     }
 }
