@@ -1,10 +1,9 @@
 #!/bin/bash
-# bash build.sh ipa|tipa|both
-#   VERSION=1.2.0 bash build.sh both   可指定版本号
+# bash build.sh ipa|tipa|both        VERSION=1.6.0 可覆盖版本号
 set -euo pipefail
 
 MODE="${1:-ipa}"
-VERSION="${VERSION:-1.2.0}"
+VERSION="${VERSION:-1.6.0}"
 NAME=Isle
 DISPLAY="屿声音乐"
 BID=com.isle.music
@@ -14,7 +13,6 @@ WORK="$(mktemp -d)"
 APP="$WORK/Payload/$NAME.app"
 mkdir -p "$APP"
 
-# ---------- 图标 ----------
 python3 - "$WORK" <<'PY'
 import zlib, struct, sys, os, math
 d = sys.argv[1]; N = 1024
@@ -101,6 +99,7 @@ cat > "$APP/Info.plist" <<PLIST
   <key>NSPhotoLibraryUsageDescription</key><string>选择头像</string>
   <key>NSCameraUsageDescription</key><string>拍摄头像</string>
   <key>NSMicrophoneUsageDescription</key><string>听歌识曲需要麦克风</string>
+  <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><true/></dict>
   <key>CFBundleIconFiles</key><array>
     <string>Icon-20@2x</string><string>Icon-20@3x</string>
     <string>Icon-29@2x</string><string>Icon-29@3x</string>
@@ -122,7 +121,6 @@ cat > "$APP/Info.plist" <<PLIST
 PLIST
 printf 'APPL????' > "$APP/PkgInfo"
 
-# ---------- 编译（关键：链接 OpenGLES / CoreImage，避免键盘渲染跳空指针）----------
 export SDK=$(xcrun --sdk iphoneos --show-sdk-path)
 FILES=$(find "$ROOT/Isle" -name '*.swift' | tr '\n' ' ')
 echo ">> 编译 $(echo $FILES | wc -w) 个 Swift 文件，版本 $VERSION"
@@ -130,17 +128,8 @@ xcrun -sdk iphoneos swiftc \
   -target "arm64-apple-ios${MIN}" -sdk "$SDK" \
   -parse-as-library -O -module-name "$NAME" \
   $FILES -o "$APP/$NAME" \
-  -framework UIKit -framework SwiftUI -framework AVFoundation \
-  -framework MediaPlayer -framework CryptoKit -framework Security \
-  -framework CoreImage -framework OpenGLES -framework QuartzCore \
-  -framework CoreGraphics -framework CoreText -framework Foundation \
-  -Xlinker -no_weak_imports 2>/dev/null || \
-xcrun -sdk iphoneos swiftc \
-  -target "arm64-apple-ios${MIN}" -sdk "$SDK" \
-  -parse-as-library -O -module-name "$NAME" \
-  $FILES -o "$APP/$NAME" \
-  -framework UIKit -framework SwiftUI -framework AVFoundation \
-  -framework MediaPlayer -framework CryptoKit -framework Security \
+  -framework UIKit -framework SwiftUI -framework AVFoundation -framework CoreMedia \
+  -framework MediaPlayer -framework CryptoKit -framework Security -framework JavaScriptCore \
   -framework CoreImage -framework OpenGLES -framework QuartzCore \
   -framework CoreGraphics -framework CoreText -framework Foundation
 chmod +x "$APP/$NAME"
