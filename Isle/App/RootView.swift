@@ -5,34 +5,22 @@ struct RootView: View {
 
     var body: some View {
         TabView {
-            Placeholder(title: "首页", note: "抖音热歌 · 榜单流行 · 伤感歌词条")
+            HomeView()
                 .tabItem { Label("首页", systemImage: "house") }
+
             Group {
-                if auth.ent.canUseVideo { Placeholder(title: "养眼", note: "纯全屏刷视频，上下滑切换") }
+                if auth.ent.canUseVideo { EyesView() }
                 else { PaywallView(need: "SVIP", feature: "养眼视频") }
             }.tabItem { Label("养眼", systemImage: "play.rectangle") }
+
             Group {
-                if auth.ent.canPlayMusic { Placeholder(title: "播放器", note: "黑胶 · 跑马灯光环 · 逐字歌词") }
+                if auth.ent.canPlayMusic { PlayerView() }
                 else { PaywallView(need: "VIP", feature: "在线听歌") }
             }.tabItem { Label("播放器", systemImage: "headphones") }
+
             MineView().tabItem { Label("我的", systemImage: "person") }
         }
         .tint(Color(red: 1, green: 0.37, blue: 0.62))
-    }
-}
-
-struct Placeholder: View {
-    let title: String
-    let note: String
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack(spacing: 10) {
-                Text(title).font(.system(size: 24, weight: .heavy))
-                Text(note).font(.footnote).foregroundColor(.white.opacity(0.45))
-                Text("界面开发中").font(.system(size: 11)).foregroundColor(.white.opacity(0.25)).padding(.top, 6)
-            }
-        }
     }
 }
 
@@ -49,15 +37,15 @@ struct PaywallView: View {
                 Image(systemName: "crown.fill").font(.system(size: 42))
                     .foregroundColor(Color(red: 1, green: 0.82, blue: 0.25))
                 Text("\(need) 才能使用\(feature)").font(.system(size: 20, weight: .bold))
-                Text("当前账号：\(auth.user?.account ?? "-")").font(.system(size: 12)).foregroundColor(.white.opacity(0.45))
+                Text("当前账号：\(auth.user?.account ?? "-")")
+                    .font(.system(size: 12)).foregroundColor(.white.opacity(0.45))
                 HStack(spacing: 8) {
                     TextField("MT-XXXXXXXXXXXX", text: $code)
                         .textInputAutocapitalization(.characters).autocorrectionDisabled(true)
                         .padding(12).background(Color.white.opacity(0.06))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                     Button("兑换") {
-                        let c = code.trimmingCharacters(in: .whitespaces)
-                        Task { await auth.redeem(c) }
+                        Task { await auth.redeem(code.trimmingCharacters(in: .whitespaces)) }
                     }
                     .padding(.horizontal, 14).padding(.vertical, 12)
                     .background(Color(red: 1, green: 0.24, blue: 0.47)).foregroundColor(.white)
@@ -79,7 +67,8 @@ struct MineView: View {
             List {
                 Section {
                     HStack(spacing: 12) {
-                        Circle().fill(LinearGradient(colors: [Color.orange, Color.pink], startPoint: .top, endPoint: .bottom))
+                        Circle().fill(LinearGradient(colors: [Color.orange, Color.pink],
+                                                     startPoint: .top, endPoint: .bottom))
                             .frame(width: 46, height: 46)
                             .overlay(Text(String((auth.user?.nickname ?? "I").prefix(1))).font(.headline))
                         VStack(alignment: .leading, spacing: 3) {
@@ -129,8 +118,7 @@ struct MineView: View {
                     .padding(12).background(Color.white.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 24)
                 Button("确认兑换") {
-                    let c = code.trimmingCharacters(in: .whitespaces)
-                    Task { await auth.redeem(c); showRedeem = false }
+                    Task { await auth.redeem(code.trimmingCharacters(in: .whitespaces)); showRedeem = false }
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 13)
                 .background(Color(red: 1, green: 0.24, blue: 0.47)).foregroundColor(.white)
