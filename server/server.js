@@ -10,7 +10,7 @@ const conf = require('./config');
 const dev = require('./device');
 const st = require('./stream');
 
-try { require('dotenv').config(); } catch (e) { /* 没装 dotenv 就用系统环境变量 */ }
+try { require('dotenv').config(); } catch (e) {}
 
 const SECRET = process.env.JWT_SECRET || 'dev-secret';
 const ADMIN_ACCOUNT = process.env.ADMIN_ACCOUNT || '528676736';
@@ -19,8 +19,9 @@ const KEY = crypto.createHash('sha256').update(process.env.APP_SECRET || SECRET)
 const RANK = { free: 0, vip: 1, svip: 2 };
 const AVATAR_DIR = process.env.AVATAR_DIR || path.join(__dirname, 'data/avatars');
 fs.mkdirSync(AVATAR_DIR, { recursive: true });
+const PROBE_TIMEOUT = parseInt(process.env.SOURCE_PROBE_TIMEOUT_MS || '8000', 10);
 
-// 音源 / 视频源表（服务端集中管理，客户端拉取）
+/* ---------- 建表 ---------- */
 db.exec(`CREATE TABLE IF NOT EXISTS sources (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   kind TEXT NOT NULL,
@@ -29,8 +30,61 @@ db.exec(`CREATE TABLE IF NOT EXISTS sources (
   note TEXT DEFAULT '',
   enabled INTEGER NOT NULL DEFAULT 1,
   sort INTEGER NOT NULL DEFAULT 0,
+  last_status TEXT DEFAULT '',
+  last_ms INTEGER DEFAULT 0,
+  checked_at INTEGER,
   created_at INTEGER NOT NULL
 )`);
+// 老库补列
+(function migrate() {
+  const cols = db.prepare("PRAGMA table_info(sources)").all().map(c => c.name);
+  ['last_status TEXT DEFAULT \'\'', 'last_ms INTEGER DEFAULT 0', 'checked_at INTEGER'].forEach(s => {
+    const name = s.split(' ')[0];
+    if (!cols.includes(name)) db.exec('ALTER TABLE sources ADD COLUMN ' + s);
+  });
+})();
+
+/* ---------- 连通性探测（防 SSRF） ---------- */
+function isPrivateHost(h) {
+  const host = h.toLowerCase();
+  if (/^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.)/.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+  if (host === '::1' || host.startsWith('[')) return true;
+  return false;
+}
+async function probe(rawUrl) {
+  let u;
+  try { u = new URL(String(rawUrl)); } catch (e) { return { ok: false, status: 'bad_url', ms: 0, detail: '地址格式不对' }; }
+  if (!/^https?:$/.test(u.protocol)) return { ok: false, status: 'bad_protocol', ms: 0, detail: '只支持 http/https' };
+  if (isPrivateHost(u.hostname)) return { ok: false, status: 'blocked', ms: 0, detail: '不允许内网地址' };
+
+  const t0 = Date.now();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), PROBE_TIMEOUT);
+  try {
+    let r = await fetch(u.toString(), {
+      method: 'GET',
+      redirect: 'follow',
+      signal: ctrl.signal,
+      headers: { 'User-Agent': 'IsleMusic/1.3 (probe)', 'Accept': '*/*' }
+    });
+    clearTimeout(timer);
+    const ms = Date.now() - t0;
+    const ct = r.headers.get('content-type') || '';
+    if (!r.ok) return { ok: false, status: 'http_' + r.status, ms, detail: 'HTTP ' + r.status };
+    // 读一小段，确认真的能取到内容
+    const buf = await r.arrayBuffer().catch(() => new ArrayBuffer(0));
+    const size = buf.byteLength;
+    if (size === 0 && ct === '') return { ok: false, status: 'empty', ms, detail: '响应为空' };
+    return { ok: true, status: 'ok', ms, detail: (ct.split(';')[0] || 'unknown') + ' · ' + fmtSize(size) };
+  } catch (e) {
+    clearTimeout(timer);
+    const ms = Date.now() - t0;
+    const aborted = String(e.name) === 'AbortError';
+    return { ok: false, status: aborted ? 'timeout' : 'unreachable', ms, detail: aborted ? '超时 ' + PROBE_TIMEOUT + 'ms' : '连不上' };
+  }
+}
+const fmtSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + 'MB' : n > 1024 ? (n / 1024).toFixed(1) + 'KB' : n + 'B';
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -72,7 +126,6 @@ const limit = (name, max, winMs) => (req, res, next) => {
   if (r.n > max) return res.status(429).json({ error: 'too_many_requests' });
   next();
 };
-
 function auth(req, res, next) {
   const h = req.headers.authorization || ''; const t = h.startsWith('Bearer ') ? h.slice(7) : '';
   try {
@@ -119,14 +172,12 @@ app.post('/api/auth/register', limit('reg', 8, 60000), async (req, res) => {
   audit(uid, 'register', String(account), req.ip);
   res.json({ token: sign(uid, user.account), user, entitlements: entitle(user.role) });
 });
-
 app.get('/api/auth/check-account', limit('chk', 40, 60000), (req, res) => {
   const a = String(req.query.account || '');
   if (!ACCOUNT_RE.test(a)) return res.json({ ok: false, reason: 'format' });
   const taken = !!db.prepare('SELECT 1 FROM users WHERE account_key=?').get(a.toLowerCase());
   res.json({ ok: !taken, reason: taken ? 'taken' : 'free' });
 });
-
 app.post('/api/auth/login', limit('login', 15, 60000), async (req, res) => {
   const key = String((req.body || {}).account || '').toLowerCase();
   const u = db.prepare('SELECT * FROM users WHERE account_key=?').get(key);
@@ -138,9 +189,7 @@ app.post('/api/auth/login', limit('login', 15, 60000), async (req, res) => {
   audit(u.id, 'login', '', req.ip);
   res.json({ token: sign(u.id, u.account), user, entitlements: entitle(user.role) });
 });
-
 app.get('/api/auth/me', auth, (req, res) => res.json({ user: req.user, entitlements: entitle(req.user.role) }));
-
 app.post('/api/auth/password', auth, async (req, res) => {
   const { oldPassword, newPassword } = req.body || {};
   if (String(newPassword || '').length < 8) return res.status(400).json({ error: 'password_too_short' });
@@ -226,13 +275,13 @@ app.post('/api/device/unbind', auth, limit('unbind', 5, 86400000), (req, res) =>
   }
 });
 
-/* ---------- 音源 / 视频源（客户端拉取） ---------- */
+/* ---------- 音源 / 视频源 ---------- */
 app.get('/api/sources', auth, (req, res) => {
   const kind = String(req.query.kind || 'music');
   if (!['music', 'video'].includes(kind)) return res.status(400).json({ error: 'bad_kind' });
   if (kind === 'music' && RANK[req.user.role] < RANK.vip) return res.status(403).json({ error: 'need_vip' });
   if (kind === 'video' && RANK[req.user.role] < RANK.svip) return res.status(403).json({ error: 'need_svip' });
-  res.json({ kind, rows: db.prepare('SELECT * FROM sources WHERE kind=? AND enabled=1 ORDER BY sort ASC, id ASC').all(kind) });
+  res.json({ kind, rows: db.prepare('SELECT id,name,url,note,last_status,last_ms FROM sources WHERE kind=? AND enabled=1 ORDER BY sort ASC, id ASC').all(kind) });
 });
 
 /* ---------- 播放票据 ---------- */
@@ -353,9 +402,8 @@ app.post('/api/admin/login', limit('adminlogin', 8, 300000), (req, res) => {
   const okPwd = p.length === p2.length && crypto.timingSafeEqual(p, p2);
   if (!okAcc || !okPwd) { audit(null, 'admin_login_fail', String(account || ''), req.ip); return res.status(401).json({ error: 'bad_credentials' }); }
   audit(null, 'admin_login', String(account), req.ip);
-  res.json({ token: jwt.sign({ admin: true, account: ADMIN_ACCOUNT }, SECRET, { expiresIn: '12h' }) });
+  res.json({ token: jwt.sign({ admin: true }, SECRET, { expiresIn: '12h' }) });
 });
-
 app.get('/api/admin/users', adminAuth, (req, res) => {
   const q = String(req.query.q || '').trim();
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
@@ -366,7 +414,6 @@ app.get('/api/admin/users', adminAuth, (req, res) => {
   const total = db.prepare('SELECT COUNT(*) c FROM users u ' + where).get(...args).c;
   res.json({ total, page, rows });
 });
-
 app.patch('/api/admin/users/:id', adminAuth, (req, res) => {
   const id = parseInt(req.params.id, 10);
   const { role, days, status, nickname, note, maxDevices } = req.body || {};
@@ -383,7 +430,6 @@ app.patch('/api/admin/users/:id', adminAuth, (req, res) => {
   if ('maxDevices' in (req.body || {})) db.prepare('UPDATE users SET max_devices=? WHERE id=?').run(Number(maxDevices) || null, id);
   res.json({ user: normalize(db.prepare('SELECT * FROM users WHERE id=?').get(id)) });
 });
-
 app.post('/api/admin/users/:id/points', adminAuth, (req, res) => {
   const id = parseInt(req.params.id, 10);
   const d = parseInt((req.body || {}).delta, 10);
@@ -405,31 +451,43 @@ app.get('/api/admin/users/:id/phone', adminAuth, (req, res) => {
   res.json({ phone: dec(u.phone_enc) });
 });
 
-/* 音源 / 视频源 管理 */
+/* 音源管理 */
 app.get('/api/admin/sources', adminAuth, (req, res) => {
   res.json({ rows: db.prepare('SELECT * FROM sources ORDER BY kind ASC, sort ASC, id ASC').all() });
 });
-app.post('/api/admin/sources', adminAuth, (req, res) => {
+app.post('/api/admin/sources', adminAuth, limit('addsrc', 30, 60000), async (req, res) => {
   const { kind, name, url, note, enabled } = req.body || {};
   if (!['music', 'video'].includes(kind)) return res.status(400).json({ error: 'bad_kind' });
   if (!name || !url) return res.status(400).json({ error: 'bad_source' });
-  const info = db.prepare('INSERT INTO sources (kind,name,url,note,enabled,sort,created_at) VALUES (?,?,?,?,?,?,?)')
-    .run(kind, String(name), String(url), String(note || ''), enabled === false ? 0 : 1, 0, now());
-  audit(null, 'admin_add_source', kind + '/' + name, req.ip);
-  res.json({ id: info.lastInsertRowid });
+  const p = await probe(url);
+  const info = db.prepare('INSERT INTO sources (kind,name,url,note,enabled,sort,last_status,last_ms,checked_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    .run(kind, String(name), String(url), String(note || ''), enabled === false ? 0 : 1, 0, p.status, p.ms, now(), now());
+  audit(null, 'admin_add_source', kind + '/' + name + '/' + p.status, req.ip);
+  res.json({ id: info.lastInsertRowid, probe: p });
 });
-app.patch('/api/admin/sources/:id', adminAuth, (req, res) => {
+app.post('/api/admin/sources/:id/test', adminAuth, limit('testsrc', 60, 60000), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const s = db.prepare('SELECT * FROM sources WHERE id=?').get(id);
+  if (!s) return res.status(404).json({ error: 'not_found' });
+  const p = await probe(s.url);
+  db.prepare('UPDATE sources SET last_status=?, last_ms=?, checked_at=? WHERE id=?').run(p.status, p.ms, now(), id);
+  res.json(p);
+});
+app.patch('/api/admin/sources/:id', adminAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const { name, url, note, enabled, sort } = req.body || {};
   const cur = db.prepare('SELECT * FROM sources WHERE id=?').get(id);
   if (!cur) return res.status(404).json({ error: 'not_found' });
-  db.prepare('UPDATE sources SET name=?, url=?, note=?, enabled=?, sort=? WHERE id=?').run(
-    name !== undefined ? String(name) : cur.name,
-    url !== undefined ? String(url) : cur.url,
+  const newUrl = url !== undefined ? String(url) : cur.url;
+  let p = { status: cur.last_status, ms: cur.last_ms };
+  if (url !== undefined && newUrl !== cur.url) p = await probe(newUrl);
+  db.prepare('UPDATE sources SET name=?, url=?, note=?, enabled=?, sort=?, last_status=?, last_ms=?, checked_at=? WHERE id=?').run(
+    name !== undefined ? String(name) : cur.name, newUrl,
     note !== undefined ? String(note) : cur.note,
     enabled !== undefined ? (enabled ? 1 : 0) : cur.enabled,
-    Number.isFinite(sort) ? sort : cur.sort, id);
-  res.json({ ok: true });
+    Number.isFinite(sort) ? sort : cur.sort,
+    p.status, p.ms, now(), id);
+  res.json({ ok: true, probe: p });
 });
 app.delete('/api/admin/sources/:id', adminAuth, (req, res) => {
   db.prepare('DELETE FROM sources WHERE id=?').run(parseInt(req.params.id, 10));
@@ -467,9 +525,8 @@ app.get('/api/admin/audit', adminAuth, (req, res) => {
   res.json({ rows: db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT 100').all() });
 });
 
-app.get('/api/health', (req, res) => res.json({ ok: true, name: 'Isle Music API', version: '1.3.0', env: process.env.NODE_ENV || 'production', node: process.version, db: 'ok', uptime: Math.floor(process.uptime()), time: new Date().toISOString() }));
+app.get('/api/health', (req, res) => res.json({ ok: true, name: 'Isle Music API', version: '1.3.1', env: process.env.NODE_ENV || 'production', node: process.version, db: 'ok', uptime: Math.floor(process.uptime()), time: new Date().toISOString() }));
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'server_error' }); });
 setInterval(() => { try { dev.sweepGrace(); } catch (e) {} }, 10 * 60000);
-
 const PORT = process.env.PORT || 8787;
 app.listen(PORT, () => console.log('Isle Music API on ' + PORT));

@@ -5,22 +5,17 @@
 *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
 body{margin:0;min-height:100vh;font:14px/1.6 -apple-system,"PingFang SC",sans-serif;color:#eaeaf2;background:#08080d}
 body:before{content:"";position:fixed;inset:-25%;z-index:0;pointer-events:none;
-background:radial-gradient(40% 30% at 20% 4%,#ff2d78,transparent 60%),
-radial-gradient(38% 28% at 82% 2%,#7b5cff,transparent 60%);filter:blur(80px);opacity:.34}
+background:radial-gradient(40% 30% at 20% 4%,#ff2d78,transparent 60%),radial-gradient(38% 28% at 82% 2%,#7b5cff,transparent 60%);filter:blur(80px);opacity:.34}
 #login{position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
 .lcard{width:100%;max-width:350px;text-align:center}
-.logo{width:84px;height:84px;border-radius:25px;margin:0 auto 16px;
-background:linear-gradient(140deg,#ff3d84,#ff7a2f 55%,#ffb347);display:flex;align-items:center;justify-content:center;
-box-shadow:0 20px 44px rgba(255,45,120,.42)}
+.logo{width:84px;height:84px;border-radius:25px;margin:0 auto 16px;background:linear-gradient(140deg,#ff3d84,#ff7a2f 55%,#ffb347);display:flex;align-items:center;justify-content:center;box-shadow:0 20px 44px rgba(255,45,120,.42)}
 .lcard h1{margin:0;font-size:21px;font-weight:800;letter-spacing:1px}
 .en{font-size:9px;letter-spacing:5px;color:rgba(255,255,255,.3);margin-top:3px}
 .hint{font-size:12px;color:rgba(255,255,255,.38);margin:16px 0 12px}
-input{width:100%;padding:13px;border-radius:13px;border:1px solid rgba(255,255,255,.12);
-background:rgba(255,255,255,.06);color:#fff;font-size:14.5px;outline:0;font-family:inherit;margin-bottom:10px}
+input{width:100%;padding:13px;border-radius:13px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;font-size:14.5px;outline:0;font-family:inherit;margin-bottom:10px}
 input::placeholder{color:rgba(255,255,255,.28)}
 button{font:inherit;cursor:pointer;border:0;color:#fff}
-.pri{width:100%;padding:14px;border-radius:14px;font-size:15px;font-weight:800;
-background:linear-gradient(135deg,#ff2d78,#ff7a2f);box-shadow:0 14px 30px rgba(255,45,120,.35)}
+.pri{width:100%;padding:14px;border-radius:14px;font-size:15px;font-weight:800;background:linear-gradient(135deg,#ff2d78,#ff7a2f);box-shadow:0 14px 30px rgba(255,45,120,.35)}
 .err{color:#ff8fb6;font-size:12px;margin-top:10px;min-height:18px}
 #app{display:none;position:relative;z-index:1;max-width:980px;margin:0 auto;padding:20px 18px 60px}
 .top{display:flex;align-items:center;justify-content:space-between;padding:6px 2px 16px}
@@ -47,7 +42,6 @@ th{font-size:10.5px;color:rgba(255,255,255,.35);font-weight:600}
 .mini{padding:5px 9px;border-radius:8px;font-size:11px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:#c9c9d6;margin:2px 3px 2px 0;cursor:pointer}
 .mini.pink{background:linear-gradient(135deg,#ff2d78,#ff7a2f);border:0;font-weight:700;color:#fff}
 .mini.on{background:rgba(0,224,164,.16);border-color:rgba(0,224,164,.4);color:#4ee6a8}
-.mini.off{background:rgba(255,255,255,.05);color:#8b8b9a}
 .mini.red{color:#ff8fb6}
 .badge{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:6px}
 .role-vip{background:rgba(123,92,255,.22);color:#b9a6ff}
@@ -58,14 +52,13 @@ th{font-size:10.5px;color:rgba(255,255,255,.35);font-weight:600}
 caption{caption-side:top;text-align:left;font-size:11px;color:rgba(255,255,255,.35);padding-bottom:8px}
 .note{font-size:11px;color:rgba(255,255,255,.32);line-height:1.7;margin-top:10px}
 pre{background:#0e0e14;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px;font-size:11.5px;overflow:auto;color:#9fe6c0;margin:8px 0 0}
-.ok{color:#4ee6a8}.bad{color:#ff8fb6}
+.ok{color:#4ee6a8}.bad{color:#ff8fb6}.wait{color:#ffb347}
 @media(max-width:700px){.stats{grid-template-columns:1fr 1fr}}
 </style></head><body>
 
 <div id="login"><div class="lcard">
 <div class="logo">🎵</div>
-<h1>屿声音乐</h1>
-<div class="en">ADMIN</div>
+<h1>屿声音乐</h1><div class="en">ADMIN</div>
 <div class="hint">请登录管理账号</div>
 <input id="acc" type="text" inputmode="numeric" placeholder="账号" autocomplete="username">
 <input id="pwd" type="password" placeholder="口令" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
@@ -92,21 +85,22 @@ pre{background:#0e0e14;border:1px solid rgba(255,255,255,.08);border-radius:10px
   <table><caption id="ucap"></caption>
   <thead><tr><th>ID</th><th>账号</th><th>昵称</th><th>角色</th><th>到期</th><th>积分</th><th>状态</th><th>操作</th></tr></thead>
   <tbody id="rows"></tbody></table>
-  <div class="note">封禁后该账号的所有接口立即 401/403，正在播放的流下一次请求就会断。积分可正可负，都会写进账本。</div>
+  <div class="note">封禁后该账号所有接口立即被拒，播放流下一次请求即断。</div>
  </div>
 
  <div class="panel" id="p-sources">
   <div class="row">
    <select id="skind"><option value="music">音乐音源</option><option value="video">视频源</option></select>
-   <input id="sname" placeholder="名称，如 LX 聚合源" style="flex:1">
+   <input id="sname" placeholder="名称" style="flex:1">
    <input id="surl" placeholder="接口地址 / 脚本 URL" style="flex:2">
-   <input id="snote" placeholder="备注（可选）" style="flex:1">
-   <button class="mini pink" onclick="addSource()">添加</button>
+   <input id="snote" placeholder="备注" style="flex:1">
+   <button class="mini pink" id="addBtn" onclick="addSource()">添加并测速</button>
   </div>
+  <pre id="probeOut" style="display:none"></pre>
   <table><caption id="scap"></caption>
-  <thead><tr><th>ID</th><th>类型</th><th>名称</th><th>地址</th><th>状态</th><th>操作</th></tr></thead>
+  <thead><tr><th>ID</th><th>类型</th><th>名称</th><th>地址</th><th>连通性</th><th>开关</th><th>操作</th></tr></thead>
   <tbody id="sourceRows"></tbody></table>
-  <div class="note">这里加的音源/视频源会通过 <code>GET /api/sources?kind=music|video</code> 下发给 App（音乐需 VIP、视频需 SVIP）。停用后客户端立刻拉不到。</div>
+  <div class="note">添加时会自动探测一次（超时 8s），结果存在 last_status；可随时点「测」重测。停用后 App 立刻拉不到。</div>
  </div>
 
  <div class="panel" id="p-codes">
@@ -133,18 +127,13 @@ pre{background:#0e0e14;border:1px solid rgba(255,255,255,.08);border-radius:10px
    <input id="ex3" type="number" placeholder="SVIP 1天"><input id="ex4" type="number" placeholder="SVIP 7天">
   </div>
   <div class="row"><button class="mini pink" onclick="saveConfig()">保存设置</button><span id="cfgTip" class="note"></span></div>
-  <div class="note">保存后立即生效，不用重启。</div>
  </div>
 
  <div class="panel" id="p-system">
   <div class="row"><button class="mini" onclick="health()">检查接口</button><button class="mini" onclick="loadAudit()">审计日志</button><button class="mini" onclick="loadStats()">刷新统计</button></div>
   <pre id="sysOut">点「检查接口」查看服务状态</pre>
   <pre id="auditOut" style="display:none"></pre>
-  <div class="note">
-   上线检查：① .env 的 JWT_SECRET / APP_SECRET / STREAM_SECRET 是否已换成随机值；<br>
-   ② Nginx 的 /stream/ 是否加了 proxy_buffering off；③ 域名是否挂了 Cloudflare 代理；<br>
-   ④ APP_SECRET 上线后不要再改。
-  </div>
+  <div class="note">① .env 三个密钥是否已换成随机值；② Nginx /stream/ 是否关 buffering；③ 域名是否挂 Cloudflare；④ APP_SECRET 上线后不要再改。</div>
  </div>
 </div>
 
@@ -199,37 +188,59 @@ async function loadUsers(page) {
         <button class="mini red" onclick="ban(${u.id},'${u.status === 'active' ? 'banned' : 'active'}')">${u.status === 'active' ? '封禁' : '解封'}</button></td></tr>`;
   }).join('') || '<tr><td colspan="8" class="note">没有数据</td></tr>';
 }
-
 const setRole = (id, role, days) => api(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ role, days }) }).then(() => { loadUsers(1); loadStats(); });
-const ban = (id, status) => api(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }).then(() => { loadUsers(1); if (status === 'banned') alert('已封禁，该账号下次请求即被拒'); });
+const ban = (id, status) => api(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }).then(() => loadUsers(1));
 async function addPoints(id) {
   const d = prompt('积分变动（正数加，负数扣）', '500'); if (!d) return;
-  const reason = prompt('备注（写进账本）', '后台调整') || '';
+  const reason = prompt('备注', '后台调整') || '';
   const r = await api(`/api/admin/users/${id}/points`, { method: 'POST', body: JSON.stringify({ delta: parseInt(d, 10), reason }) });
   alert('已调整，当前余额 ' + r.balance); loadUsers(1);
 }
 async function showPhone(id) {
-  try { const r = await api(`/api/admin/users/${id}/phone`); alert('手机号：' + r.phone); }
-  catch (e) { alert('该用户未填写手机号'); }
+  try { const r = await api(`/api/admin/users/${id}/phone`); alert('手机号：' + r.phone); } catch (e) { alert('该用户未填写手机号'); }
 }
 
+function probeBadge(status, ms) {
+  if (!status) return '<span class=wait>未测</span>';
+  if (status === 'ok') return `<span class=ok>● 正常</span> <span style="color:rgba(255,255,255,.35)">${ms}ms</span>`;
+  return `<span class=bad>● ${status}</span> <span style="color:rgba(255,255,255,.35)">${ms}ms</span>`;
+}
 async function loadSources() {
   const r = await api('/api/admin/sources');
   $('scap').innerText = `共 ${r.rows.length} 条`;
   $('sourceRows').innerHTML = r.rows.map(s => `<tr><td>${s.id}</td>
     <td><span class="badge k-${s.kind}">${s.kind === 'music' ? '音源' : '视频'}</span></td>
-    <td>${s.name}</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.url}</td>
-    <td>${s.enabled ? '<span class=ok>启用</span>' : '<span class=off>停用</span>'}</td>
-    <td><button class="mini ${s.enabled ? 'on' : 'off'}" onclick="toggleSource(${s.id},${s.enabled ? 0 : 1})">${s.enabled ? '停用' : '启用'}</button>
-      <button class="mini red" onclick="delSource(${s.id})">删除</button></td></tr>`).join('')
-    || '<tr><td colspan="6" class="note">还没有音源，上面表单添加</td></tr>';
+    <td>${s.name}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.url}</td>
+    <td>${probeBadge(s.last_status, s.last_ms)}</td>
+    <td><button class="mini ${s.enabled ? 'on' : ''}" onclick="toggleSource(${s.id},${s.enabled ? 0 : 1})">${s.enabled ? '启用中' : '已停用'}</button></td>
+    <td><button class="mini" onclick="testSource(${s.id})">测</button>
+      <button class="mini red" onclick="delSource(${s.id})">删</button></td></tr>`).join('')
+    || '<tr><td colspan="7" class="note">还没有音源</td></tr>';
 }
 async function addSource() {
   const kind = $('skind').value, name = $('sname').value.trim(), url = $('surl').value.trim(), note = $('snote').value.trim();
   if (!name || !url) return alert('名称和地址都要填');
-  await api('/api/admin/sources', { method: 'POST', body: JSON.stringify({ kind, name, url, note }) });
-  $('sname').value = ''; $('surl').value = ''; $('snote').value = '';
-  loadSources(); loadStats();
+  $('addBtn').innerText = '测速中…'; $('addBtn').disabled = true;
+  try {
+    const r = await api('/api/admin/sources', { method: 'POST', body: JSON.stringify({ kind, name, url, note }) });
+    const p = r.probe;
+    $('probeOut').style.display = 'block';
+    $('probeOut').className = p.ok ? 'ok' : 'bad';
+    $('probeOut').innerText = (p.ok ? '✓ 连通正常' : '✗ ' + p.status) + '　' + p.ms + 'ms　' + p.detail;
+    $('sname').value = ''; $('surl').value = ''; $('snote').value = '';
+    loadSources(); loadStats();
+  } catch (e) {
+    $('probeOut').style.display = 'block'; $('probeOut').className = 'bad';
+    $('probeOut').innerText = '添加失败：' + e.message;
+  }
+  $('addBtn').innerText = '添加并测速'; $('addBtn').disabled = false;
+}
+async function testSource(id) {
+  const p = await api('/api/admin/sources/' + id + '/test', { method: 'POST' });
+  $('probeOut').style.display = 'block';
+  $('probeOut').className = p.ok ? 'ok' : 'bad';
+  $('probeOut').innerText = (p.ok ? '✓ 连通正常' : '✗ ' + p.status) + '　' + p.ms + 'ms　' + p.detail;
+  loadSources();
 }
 const toggleSource = (id, enabled) => api('/api/admin/sources/' + id, { method: 'PATCH', body: JSON.stringify({ enabled: !!enabled }) }).then(() => { loadSources(); loadStats(); });
 const delSource = id => confirm('确定删除？') && api('/api/admin/sources/' + id, { method: 'DELETE' }).then(() => { loadSources(); loadStats(); });
@@ -246,7 +257,6 @@ async function loadCodes(onlyUnused) {
     <td>${c.used_by ? '<span class=bad>已用</span>' : '<span class=ok>未用</span>'}</td><td>${c.batch || ''}</td></tr>`).join('')
     || '<tr><td colspan="5" class="note">暂无卡密</td></tr>';
 }
-
 async function loadConfig() {
   const c = await api('/api/admin/config');
   $('rw').value = c.checkin.rewards.join(',');
@@ -257,19 +267,16 @@ async function loadConfig() {
   $('ex3').value = c.exchange.svip_1d; $('ex4').value = c.exchange.svip_7d;
 }
 async function saveConfig() {
-  const body = {
-    checkin: { rewards: $('rw').value.split(',').map(s => parseInt(s.trim(), 10)).filter(Number.isFinite),
+  const body = { checkin: { rewards: $('rw').value.split(',').map(s => parseInt(s.trim(), 10)).filter(Number.isFinite),
       day7BonusRole: $('d7role').value, day7BonusDays: +$('d7days').value, day7Points: +$('d7pts').value },
-    exchange: { vip_1d: +$('ex1').value, vip_7d: +$('ex2').value, svip_1d: +$('ex3').value, svip_7d: +$('ex4').value }
-  };
+    exchange: { vip_1d: +$('ex1').value, vip_7d: +$('ex2').value, svip_1d: +$('ex3').value, svip_7d: +$('ex4').value } };
   await api('/api/admin/config', { method: 'PUT', body: JSON.stringify(body) });
   $('cfgTip').innerText = '已保存 ' + new Date().toLocaleTimeString(); $('cfgTip').className = 'note ok'; loadConfig();
 }
-
 async function health() {
   try {
     const j = await (await fetch('/api/health')).json();
-    $('sysOut').innerText = `状态：正常\n名称：${j.name}\n版本：${j.version}\nNode：${j.node}\n运行：${Math.floor(j.uptime / 60)} 分钟\n时间：${j.time}`;
+    $('sysOut').innerText = `状态：正常\n版本：${j.version}\nNode：${j.node}\n运行：${Math.floor(j.uptime / 60)} 分钟`;
     $('sysOut').className = 'ok';
   } catch (e) { $('sysOut').innerText = '接口无响应'; $('sysOut').className = 'bad'; }
 }
