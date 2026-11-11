@@ -7,14 +7,41 @@ struct Song: Identifiable, Hashable {
     var artistPic: String? = nil
 }
 
+struct PlaylistCard: Identifiable {
+    let id = UUID()
+    let name: String
+    let count: String
+    let first: String
+    let c1: Color
+    let c2: Color
+}
+
 enum DemoData {
-    static let hot: [Song] = [
+    static let newSongs: [Song] = [
         Song(title: "夜航星", artist: "Lummy"),
         Song(title: "坠落星空（女版）", artist: "阿YueYue"),
         Song(title: "Bones（Remix）", artist: "DJ 小鹿"),
         Song(title: "若把你", artist: "小阿七"),
         Song(title: "乌梅子酱", artist: "李荣浩"),
         Song(title: "晚风（Live）", artist: "陈壹千")
+    ]
+
+    /// 兼容旧代码引用
+    static var hot: [Song] { newSongs }
+
+    static let playlists: [PlaylistCard] = [
+        PlaylistCard(name: "深夜emo｜把心事都交给耳机", count: "128万", first: "慢冷",
+                     c1: Color(red: 0.04, green: 0.24, blue: 0.36), c2: Color(red: 0, green: 0.65, blue: 0.84)),
+        PlaylistCard(name: "通勤路上 · 一秒清醒", count: "86万", first: "若把你",
+                     c1: Color(red: 0.16, green: 0.06, blue: 0.32), c2: Color(red: 0.48, green: 0.36, blue: 1)),
+        PlaylistCard(name: "华语热歌｜循环到天亮", count: "43万", first: "坠落星空",
+                     c1: Color(red: 0.04, green: 0.22, blue: 0.35), c2: Color(red: 0, green: 0.84, blue: 1)),
+        PlaylistCard(name: "纯音乐｜写字楼的午后", count: "31万", first: "晚风",
+                     c1: Color(red: 0.07, green: 0.23, blue: 0.36), c2: Color(red: 0.16, green: 0.07, blue: 0.25)),
+        PlaylistCard(name: "抖音热门｜一秒上头", count: "22万", first: "Bones",
+                     c1: Color(red: 0, green: 0.23, blue: 0.30), c2: Color(red: 0, green: 0.88, blue: 0.64)),
+        PlaylistCard(name: "粤语老歌｜时光机", count: "17万", first: "喜帖街",
+                     c1: Color(red: 0.23, green: 0.06, blue: 0.31), c2: Color(red: 0.76, green: 0.25, blue: 0.48))
     ]
 
     struct Chart: Identifiable {
@@ -37,13 +64,6 @@ enum DemoData {
     ]
 }
 
-private func pickPic(_ d: [String: Any]) -> String? {
-    for k in ["pic", "img", "cover", "artwork", "artistPic", "singerImg", "avatar", "image"] {
-        if let s = d[k] as? String, s.hasPrefix("http") { return s }
-    }
-    return nil
-}
-
 struct SingleLineLyric: View {
     let text: String
     @State private var tw: CGFloat = 0
@@ -53,7 +73,7 @@ struct SingleLineLyric: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                label.opacity(scroll ? 0 : 1).frame(width: geo.size.width)
+                label.opacity(scroll ? 0 : 1).frame(width: geo.size.width, alignment: .center)
                 if scroll {
                     TimelineView(.animation) { ctx in
                         let t = ctx.date.timeIntervalSinceReferenceDate
@@ -70,37 +90,35 @@ struct SingleLineLyric: View {
                                  startPoint: .leading, endPoint: .trailing))
             .onAppear { bw = geo.size.width }
         }
-        .frame(height: 24)
+        .frame(height: 22)
     }
 
     private var label: some View {
         Text(text)
-            .font(.system(size: 15.5, weight: .bold))
+            .font(.system(size: 14.5, weight: .semibold))
             .fixedSize()
-            .foregroundStyle(LinearGradient(colors: [.white,
-                                                     Color(red: 0.62, green: 0.93, blue: 1),
-                                                     Color(red: 0.72, green: 0.86, blue: 1)],
+            .foregroundStyle(LinearGradient(colors: [.white.opacity(0.92),
+                                                     Color(red: 0.62, green: 0.93, blue: 1)],
                                             startPoint: .leading, endPoint: .trailing))
             .background(GeometryReader { g in Color.clear.onAppear { tw = g.size.width } })
     }
 }
 
 struct HomeView: View {
-    @EnvironmentObject var auth: AuthStore
     @ObservedObject private var engine = MusicEngine.shared
     @State private var lyricIndex = 0
-    @State private var hotBatch: [Song] = Array(DemoData.hot.prefix(3))
-    @State private var pics: [String: String] = [:]
     @State private var toast: String?
     @State private var busy = false
 
-    private let lyrics: [(String, String, String)] = [
-        ("我把所有的委屈都咽下去，只为了在你面前笑得像个没事人", "慢冷", "梁静茹"),
-        ("你走后，我把每首歌都听成了你", "坠落星空", "阿YueYue"),
-        ("后来我们什么都有了，却没有了我们", "后来", "刘若英"),
-        ("都怪我，把爱想得太简单", "说谎", "林宥嘉")
+    private let lyrics: [(String, String)] = [
+        ("我把所有的委屈都咽下去，只为了在你面前笑得像个没事人", "慢冷 · 梁静茹"),
+        ("你走后，我把每首歌都听成了你", "坠落星空 · 阿YueYue"),
+        ("后来我们什么都有了，却没有了我们", "后来 · 刘若英"),
+        ("都怪我，把爱想得太简单", "说谎 · 林宥嘉"),
+        ("我开始习惯一个人，习惯在人群里假装热闹", "孤独患者 · 陈奕迅"),
+        ("如果光也会怕黑，那我陪你一起暗", "夜航星 · Lummy")
     ]
-    private var lyric: (String, String, String) { lyrics[lyricIndex % lyrics.count] }
+    private var lyric: (String, String) { lyrics[lyricIndex % lyrics.count] }
 
     var body: some View {
         NavigationView {
@@ -108,192 +126,220 @@ struct HomeView: View {
                 HomeBackgroundView()
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        header
-                        lyricBlock
-                        hotCard.padding(.top, 14)
-                        chartsSection.padding(.top, 16)
+                        topBar
+                        lyricRow
+                        banner.padding(.top, 12)
+                        playlistSection.padding(.top, 18)
+                        newMusicSection.padding(.top, 18)
                     }
                     .padding(.horizontal, 14)
-                    .padding(.bottom, 90)
+                    .padding(.bottom, 96)
                 }
                 if let toast {
                     Text(toast)
                         .font(.system(size: 11.5))
                         .foregroundColor(.white.opacity(0.92))
                         .padding(.horizontal, 14).padding(.vertical, 9)
-                        .background(Capsule().fill(Color.black.opacity(0.7)))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 0.6))
+                        .background(Capsule().fill(Color.black.opacity(0.72)))
+                        .overlay(Capsule().stroke(Color(red: 0, green: 0.84, blue: 1).opacity(0.25), lineWidth: 0.6))
                         .padding(.bottom, 18)
                 }
             }
             .navigationBarHidden(true)
         }
         .navigationViewStyle(StackNavigationViewStyle())
-        .onAppear { roll() }
-        .onReceive(Timer.publish(every: 15, on: .main, in: .common).autoconnect()) { _ in
-            withAnimation(.easeOut(duration: 0.4)) { lyricIndex += 1 }
+        .onReceive(Timer.publish(every: 12, on: .main, in: .common).autoconnect()) { _ in
+            withAnimation(.easeOut(duration: 0.35)) { lyricIndex += 1 }
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 0) {
-            Text(greeting).font(.system(size: 15, weight: .bold))
-                .foregroundColor(.white.opacity(0.86))
-                .shadow(color: .black.opacity(0.6), radius: 6, y: 1)
-            Spacer(minLength: 12)
-            HStack(spacing: 10) {
-                NavigationLink(destination: SearchView()) {
-                    icon("magnifyingglass")
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            NavigationLink(destination: SearchView()) {
+                HStack(spacing: 7) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 13))
+                    Text("搜索歌曲、歌手、歌单").font(.system(size: 12.5))
+                    Spacer()
                 }
-                NavigationLink(destination: CheckinView()) {
-                    icon("bell")
-                }
+                .foregroundColor(.white.opacity(0.55))
+                .padding(.horizontal, 12)
+                .frame(height: 34)
+                .background(Capsule().fill(Color.white.opacity(0.07)))
+                .overlay(Capsule().stroke(Color(red: 0, green: 0.84, blue: 1).opacity(0.22), lineWidth: 0.8))
+            }
+            NavigationLink(destination: CheckinView()) {
+                Image(systemName: "bell").font(.system(size: 15))
+                    .foregroundColor(.white.opacity(0.88))
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Color.white.opacity(0.07)))
+                    .overlay(Circle().stroke(Color(red: 0, green: 0.84, blue: 1).opacity(0.22), lineWidth: 0.8))
             }
         }
-        .frame(height: 48)
-        .padding(.top, 2)
+        .frame(height: 50)
     }
 
-    private func icon(_ name: String) -> some View {
-        Image(systemName: name)
-            .font(.system(size: 16))
-            .foregroundColor(.white.opacity(0.9))
-            .frame(width: 34, height: 34)
-            .background(Circle().fill(Color.black.opacity(0.32)))
-            .overlay(Circle().stroke(Color(red: 0, green: 0.84, blue: 1).opacity(0.28), lineWidth: 0.8))
-    }
-
-    private var greeting: String {
-        let h = Calendar.current.component(.hour, from: Date())
-        let n = auth.user?.nickname ?? "欢迎"
-        if h < 6 { return "夜深了，注意休息" }
-        if h < 12 { return "早上好，\(n)" }
-        if h < 18 { return "下午好，\(n)" }
-        return "晚上好，\(n)"
-    }
-
-    private var lyricBlock: some View {
-        VStack(spacing: 0) {
-            Button { withAnimation(.easeOut(duration: 0.4)) { lyricIndex += 1 } } label: {
-                SingleLineLyric(text: lyric.0)
-                    .frame(maxWidth: 300)
-                    .frame(maxWidth: .infinity)
+    private var lyricRow: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.35)) { lyricIndex += 1 }
+        } label: {
+            VStack(spacing: 5) {
+                SingleLineLyric(text: lyric.0).frame(maxWidth: 320)
+                Text(lyric.1).font(.system(size: 9.5)).foregroundColor(.white.opacity(0.42))
             }
-            .buttonStyle(PlainButtonStyle())
-            .id(lyricIndex)
-
-            HStack(spacing: 6) {
-                Image(systemName: "music.note").font(.system(size: 9))
-                Text(lyric.1).font(.system(size: 10.5, weight: .semibold))
-                Text("·").font(.system(size: 10.5))
-                Text(lyric.2).font(.system(size: 10.5))
-            }
-            .foregroundColor(.white.opacity(0.45))
-            .padding(.top, 8)
-
-            LinearGradient(colors: [.clear, Color(red: 0, green: 0.84, blue: 1), .clear],
-                           startPoint: .leading, endPoint: .trailing)
-                .frame(width: 44, height: 2)
-                .padding(.top, 10)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 8)
+        .buttonStyle(PlainButtonStyle())
+        .id(lyricIndex)
     }
 
-    private var hotCard: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "flame.fill").font(.system(size: 12)).foregroundColor(Color(red: 1, green: 0.55, blue: 0.2))
-                Text("抖音热歌").font(.system(size: 14, weight: .heavy))
-                Spacer()
-                Button { roll() } label: {
-                    Text("换一批").font(.system(size: 10))
-                        .foregroundColor(Color(red: 0.5, green: 0.85, blue: 1))
+    private var banner: some View {
+        Button { play("每日推荐") } label: {
+            ZStack(alignment: .bottomLeading) {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(LinearGradient(colors: [Color(red: 0.03, green: 0.15, blue: 0.23),
+                                                  Color(red: 0.04, green: 0.23, blue: 0.34),
+                                                  Color(red: 0.16, green: 0.06, blue: 0.32)],
+                                         startPoint: .leading, endPoint: .trailing))
+                    .frame(height: 126)
+                    .overlay(RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color(red: 0, green: 0.84, blue: 1).opacity(0.22), lineWidth: 0.8))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("每日推荐").font(.system(size: 17, weight: .heavy))
+                    Text("根据你的口味生成 · 每次都不一样")
+                        .font(.system(size: 10.5)).foregroundColor(.white.opacity(0.6))
+                    Text("30 首")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(Color(red: 0.62, green: 0.93, blue: 1))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Capsule().fill(Color(red: 0, green: 0.84, blue: 1).opacity(0.16)))
                 }
-            }
-            ForEach(hotBatch) { s in
-                Button { play(s.title) } label: {
-                    HStack(spacing: 10) {
-                        ArtistAvatar(name: s.artist, urlString: pics[s.title], size: 42)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(s.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                                .shadow(color: .black.opacity(0.5), radius: 4)
-                            Text(s.artist).font(.system(size: 11)).foregroundColor(.white.opacity(0.6)).lineLimit(1)
-                        }
-                        Spacer(minLength: 8)
-                        if busy && engine.current?.title == s.title {
-                            ProgressView().scaleEffect(0.6)
-                        } else {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 11))
-                                .foregroundColor(Color(red: 0, green: 0.84, blue: 1))
-                        }
+                .padding(14)
+
+                HStack {
+                    Spacer()
+                    ZStack {
+                        Circle().fill(AngularGradient(colors: [Color(red: 0.02, green: 0.08, blue: 0.12),
+                                                               Color(red: 0.05, green: 0.20, blue: 0.28),
+                                                               Color(red: 0.02, green: 0.08, blue: 0.12)],
+                                                      center: .center))
+                            .frame(width: 96, height: 96)
+                        Circle().stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                            .frame(width: 96, height: 96)
+                        Circle()
+                            .fill(LinearGradient(colors: [Color(red: 0.04, green: 0.15, blue: 0.25),
+                                                          Color(red: 0.16, green: 0.07, blue: 0.25)],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 34, height: 34)
+                            .overlay(Circle().stroke(Color(red: 0, green: 0.84, blue: 1).opacity(0.5), lineWidth: 0.8))
                     }
-                    .padding(.vertical, 7)
-                    .contentShape(Rectangle())
+                    .offset(x: 24)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .padding(.trailing, 10)
             }
         }
-        .padding(13)
-        .background(RoundedRectangle(cornerRadius: 20)
-            .fill(Color.black.opacity(0.34)))
-        .overlay(RoundedRectangle(cornerRadius: 20)
-            .stroke(Color(red: 0, green: 0.84, blue: 1).opacity(0.22), lineWidth: 0.8))
+        .buttonStyle(PlainButtonStyle())
     }
 
-    private var chartsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private var playlistSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("榜单流行").font(.system(size: 14, weight: .heavy))
+                Text("推荐歌单").font(.system(size: 16, weight: .heavy))
                 Spacer()
                 NavigationLink(destination: ChartsView()) {
-                    HStack(spacing: 3) {
+                    HStack(spacing: 2) {
                         Text("更多").font(.system(size: 11))
                         Image(systemName: "chevron.right").font(.system(size: 9))
                     }
                     .foregroundColor(Color(red: 0.5, green: 0.85, blue: 1))
                 }
             }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                ForEach(DemoData.charts) { c in chartCard(c) }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10),
+                                GridItem(.flexible(), spacing: 10),
+                                GridItem(.flexible(), spacing: 10)], spacing: 12) {
+                ForEach(DemoData.playlists) { p in
+                    Button { play(p.first) } label: {
+                        VStack(alignment: .leading, spacing: 5) {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(LinearGradient(colors: [p.c1, p.c2],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .aspectRatio(1, contentMode: .fit)
+                                .overlay(alignment: .topTrailing) {
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "headphones").font(.system(size: 8))
+                                        Text(p.count).font(.system(size: 9, weight: .bold))
+                                    }
+                                    .foregroundColor(.white.opacity(0.92))
+                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.black.opacity(0.42)))
+                                    .padding(5)
+                                }
+                                .overlay(RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color(red: 0, green: 0.84, blue: 1).opacity(0.16), lineWidth: 0.7))
+                            Text(p.name)
+                                .font(.system(size: 10.5))
+                                .foregroundColor(.white.opacity(0.86))
+                                .lineLimit(2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
             }
         }
     }
 
-    private func chartCard(_ c: DemoData.Chart) -> some View {
-        NavigationLink(destination: ChartDetailView(chart: c)) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(c.name).font(.system(size: 12, weight: .heavy))
-                    Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 9)).foregroundColor(.white.opacity(0.6))
+    private var newMusicSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("最新音乐").font(.system(size: 16, weight: .heavy))
+                Spacer()
+                Button { play("新歌") } label: {
+                    HStack(spacing: 2) {
+                        Text("播放全部").font(.system(size: 11))
+                        Image(systemName: "chevron.right").font(.system(size: 9))
+                    }
+                    .foregroundColor(Color(red: 0.5, green: 0.85, blue: 1))
                 }
-                ForEach(Array(c.songs.prefix(3)), id: \.self) { n in
-                    Text(n).font(.system(size: 9.5, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.95))
-                        .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-                }
-                Spacer(minLength: 0)
             }
-            .padding(11)
-            .frame(height: 112, alignment: .top)
-            .background(LinearGradient(colors: [c.c1, c.c2], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(red: 0, green: 0.84, blue: 1).opacity(0.18), lineWidth: 0.7))
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    private func roll() {
-        hotBatch = Array(DemoData.hot.shuffled().prefix(3))
-        Task { await loadPics() }
-    }
-
-    private func loadPics() async {
-        for s in hotBatch where pics[s.title] == nil {
-            if let list = try? await engine.search(s.title), let f = list.first, let p = pickPic(f) {
-                await MainActor.run { pics[s.title] = p }
+            VStack(spacing: 0) {
+                ForEach(Array(DemoData.newSongs.enumerated()), id: \.element.id) { i, s in
+                    Button { play(s.title) } label: {
+                        HStack(spacing: 10) {
+                            Text(String(format: "%02d", i + 1))
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white.opacity(0.35))
+                                .frame(width: 18)
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(LinearGradient(colors: [Color(red: 0.04, green: 0.24, blue: 0.36),
+                                                              Color(red: 0, green: 0.65, blue: 0.84)],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 42, height: 42)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(s.title).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
+                                Text(s.artist)
+                                    .font(.system(size: 10.5))
+                                    .foregroundColor(.white.opacity(0.5))
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 6)
+                            if busy && engine.current?.title == s.title {
+                                ProgressView().scaleEffect(0.6)
+                            } else {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white.opacity(0.3))
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    if i < DemoData.newSongs.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 0.5).padding(.leading, 70)
+                    }
+                }
             }
         }
     }
@@ -307,7 +353,7 @@ struct HomeView: View {
                 busy = false
                 toast = engine.isPlaying ? "正在播放：\(engine.current?.title ?? kw)" : engine.status
             }
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
             await MainActor.run { withAnimation { toast = nil } }
         }
     }
