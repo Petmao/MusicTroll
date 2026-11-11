@@ -2,7 +2,7 @@
 
 TrollStore（巨魔）安装的音乐 + 短视频客户端，带会员体系与自建后端。
 
-- 短名：屿声　英文：Isle　接口：**https://ys.irepo.cn**
+- 短名：屿声　英文：Isle　接口：**
 - 仓库：`Petmao/MusicTroll`
 
 ## 目录
