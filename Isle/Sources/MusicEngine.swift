@@ -9,7 +9,7 @@ struct MusicTrack: Equatable {
     var cover: String? = nil
 }
 
-/// 音乐引擎：直连 api.irepo.cn/api/wxmusic，带超时/重试
+/// 音乐引擎：直连 api.irepo.cn/api/wxmusic + AVAudioSession 配好 + 失败可见
 @MainActor
 final class MusicEngine: ObservableObject {
     static let shared = MusicEngine()
@@ -17,17 +17,16 @@ final class MusicEngine: ObservableObject {
     @Published var current: MusicTrack?
     @Published var isPlaying = false
     @Published var progress: Double = 0
+    @Published var duration: Double = 0
     @Published var status: String = "就绪"
 
     private var player: AVPlayer?
     private var ticker: Timer?
+    private var itemObs: NSKeyValueObservation?
     private let apiBase = "https://api.irepo.cn/api/wxmusic"
 
     enum EngineError: Error, LocalizedError {
-        case noResult
-        case noUrl
-        case timeout
-        case offline
+        case noResult, noUrl, timeout, offline
         case api(String)
         var errorDescription: String? {
             switch self {
@@ -40,21 +39,26 @@ final class MusicEngine: ObservableObject {
         }
     }
 
-    // MARK: - 搜索（带重试）
+    // MARK: - 音频会话（关键：不设会没声音）
+    private func configureSession() {
+        let s = AVAudioSession.sharedInstance()
+        try? s.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetoothA2DP])
+        try? s.setActive(true)
+    }
+
+    // MARK: - 搜索
     func search(_ keyword: String) async throws -> [[String: Any]] {
         let kw = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !kw.isEmpty else { throw EngineError.noResult }
-
-        var lastError: Error = EngineError.timeout
-        for attempt in 0..<2 {
-            do {
-                return try await requestOnce(kw)
-            } catch {
-                lastError = error
-                if attempt == 0 { try? await Task.sleep(nanoseconds: 800_000_000) }
+        var last: Error = EngineError.timeout
+        for i in 0..<2 {
+            do { return try await requestOnce(kw) }
+            catch {
+                last = error
+                if i == 0 { try? await Task.sleep(nanoseconds: 700_000_000) }
             }
         }
-        throw lastError
+        throw last
     }
 
     private func requestOnce(_ keyword: String) async throws -> [[String: Any]] {
@@ -64,16 +68,12 @@ final class MusicEngine: ObservableObject {
             URLQueryItem(name: "keyword", value: keyword)
         ]
         guard let url = comps.url else { throw EngineError.api("bad_url") }
-
         var req = URLRequest(url: url, timeoutInterval: 40)
         req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
-        req.setValue("application/json", forHTTPHeaderField: "Accept")
 
         let data: Data
-        let resp: URLResponse
-        do {
-            (data, resp) = try await URLSession.shared.data(for: req)
-        } catch let e as URLError {
+        do { (data, _) = try await URLSession.shared.data(for: req) }
+        catch let e as URLError {
             switch e.code {
             case .timedOut: throw EngineError.timeout
             case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost:
@@ -82,13 +82,9 @@ final class MusicEngine: ObservableObject {
             }
         }
 
-        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw EngineError.api("HTTP \(http.statusCode)")
-        }
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw EngineError.api("返回不是 JSON")
         }
-
         let code = (obj["code"] as? Int) ?? 0
         let title = (obj["title"] as? String) ?? ""
         let singer = (obj["singer"] as? String) ?? ""
@@ -97,16 +93,12 @@ final class MusicEngine: ObservableObject {
 
         guard !musicURL.isEmpty else {
             if code == 200 { throw EngineError.noUrl }
-            let msg = (obj["msg"] as? String) ?? (obj["message"] as? String) ?? "code \(code)"
-            throw EngineError.api(msg)
+            throw EngineError.api((obj["msg"] as? String) ?? "code \(code)")
         }
-
-        return [[
-            "title": title.isEmpty ? keyword : title,
-            "artist": singer.isEmpty ? "未知歌手" : singer,
-            "url": musicURL,
-            "cover": cover
-        ]]
+        return [["title": title.isEmpty ? keyword : title,
+                 "artist": singer.isEmpty ? "未知歌手" : singer,
+                 "url": musicURL,
+                 "cover": cover]]
     }
 
     // MARK: - 播放
@@ -129,19 +121,39 @@ final class MusicEngine: ObservableObject {
             throw EngineError.noUrl
         }
 
-        status = "取播放票据…"
-        let ticket = try await APIClient.shared.playTicket(url: up.absoluteString, kind: "audio")
-        guard let signed = URL(string: ticket.path, relativeTo: APIClient.shared.baseURL)?.absoluteURL else {
-            throw EngineError.noUrl
+        configureSession()
+
+        status = "取播放地址…"
+        // 先用签名流（https），失败则退回原地址
+        var playURL = up
+        if let ticket = try? await APIClient.shared.playTicket(url: up.absoluteString, kind: "audio"),
+           let signed = URL(string: ticket.path, relativeTo: APIClient.shared.baseURL)?.absoluteURL {
+            playURL = signed
         }
 
         let precise = UserDefaults.standard.bool(forKey: "preciseSeek")
-        let it = AVPlayerItem(url: signed)
+        let it = AVPlayerItem(url: playURL)
         it.preferredForwardBufferDuration = precise ? 0 : 3
         let p = AVPlayer(playerItem: it)
         p.automaticallyWaitsToMinimizeStalling = !precise
+
+        itemObs = it.observe(\.status, options: [.new]) { [weak self] item, _ in
+            Task { @MainActor in
+                guard let self = self else { return }
+                switch item.status {
+                case .failed:
+                    self.status = "播放失败：\(item.error?.localizedDescription ?? "未知")"
+                    self.isPlaying = false
+                case .readyToPlay:
+                    self.duration = item.duration.seconds.isFinite ? item.duration.seconds : 0
+                    if self.status.hasPrefix("取播放") || self.status == "就绪" { self.status = "正在播放" }
+                default: break
+                }
+            }
+        }
+
         player = p
-        current = MusicTrack(title: title, artist: artist, playURL: signed,
+        current = MusicTrack(title: title, artist: artist, playURL: playURL,
                              cover: item["cover"] as? String)
         p.play()
         isPlaying = true
@@ -168,8 +180,12 @@ final class MusicEngine: ObservableObject {
                 guard let self = self, let p = self.player else { return }
                 let t = p.currentTime().seconds
                 let d = p.currentItem?.duration.seconds ?? 0
-                if d.isFinite, d > 0 { self.progress = min(1, max(0, t / d)) }
+                if d.isFinite, d > 0 {
+                    self.duration = d
+                    self.progress = min(1, max(0, t / d))
+                }
                 self.isPlaying = (p.timeControlStatus == .playing)
+                if self.isPlaying && self.status != "正在播放" { self.status = "正在播放" }
             }
         }
     }
