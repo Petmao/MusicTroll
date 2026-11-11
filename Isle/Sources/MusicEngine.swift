@@ -8,7 +8,7 @@ struct MusicTrack: Equatable {
     let playURL: URL
 }
 
-/// 音乐引擎：拉音源脚本 → 搜索 → 取播放地址 → 走服务端签名流播放
+/// 音乐引擎：优先用脚本 → 脚本没有 search 时走内置搜索兜底
 @MainActor
 final class MusicEngine: ObservableObject {
     static let shared = MusicEngine()
@@ -19,111 +19,109 @@ final class MusicEngine: ObservableObject {
     @Published var status: String = "就绪"
 
     private var player: AVPlayer?
-    private var timeObserver: Any?
     private var ticker: Timer?
     private var runners: [Int: ScriptRunner] = [:]
 
     enum EngineError: Error, LocalizedError {
-        case noSource, badSource, noResult, noUrl, scriptMissing(String)
+        case noResult, noUrl, builtinFailed
         var errorDescription: String? {
             switch self {
-            case .noSource: return "后台还没配置音乐音源"
-            case .badSource: return "音源地址无效或不是 JS"
             case .noResult: return "搜索无结果"
             case .noUrl: return "没取到播放地址"
-            case .scriptMissing(let f): return "音源脚本缺少函数 \(f)"
+            case .builtinFailed: return "内置搜索也失败，请检查网络"
             }
         }
     }
 
-    // MARK: - 源
     func loadSources() async -> [SourceItem] {
         (try? await APIClient.shared.sources(kind: "music")) ?? []
     }
 
     private func runner(for src: SourceItem) async throws -> ScriptRunner {
         if let r = runners[src.id] { return r }
-        guard let url = URL(string: src.url) else { throw EngineError.badSource }
+        guard let url = URL(string: src.url) else { throw EngineError.builtinFailed }
         var req = URLRequest(url: url, timeoutInterval: 15)
         req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw EngineError.badSource
-        }
-        guard let text = String(data: data, encoding: .utf8) else { throw EngineError.badSource }
+        let (data, _) = try await URLSession.shared.data(for: req)
+        guard let text = String(data: data, encoding: .utf8) else { throw EngineError.builtinFailed }
         let r = try ScriptRunner(script: text, name: src.name)
         runners[src.id] = r
         return r
     }
 
-    // MARK: - 解析（宽容）
+    // MARK: - 解析脚本返回
     private func parseList(_ raw: String) -> [[String: Any]]? {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if s.hasPrefix("\"") { // 二次编码的 JSON 字符串
+        if s.hasPrefix("\"") {
             if let unwrapped = try? JSONSerialization.jsonObject(with: Data(s.utf8)) as? String {
                 s = unwrapped.trimmingCharacters(in: .whitespacesAndNewlines)
             }
         }
         guard let data = s.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) else { return nil }
-
         if let arr = obj as? [[String: Any]] { return arr }
         if let dict = obj as? [String: Any] {
             for key in ["data", "list", "songs", "result", "items", "results"] {
                 if let arr = dict[key] as? [[String: Any]] { return arr }
                 if let arr = dict[key] as? [Any] {
-                    let mapped = arr.compactMap { $0 as? [String: Any] }
-                    if !mapped.isEmpty { return mapped }
+                    let m = arr.compactMap { $0 as? [String: Any] }
+                    if !m.isEmpty { return m }
                 }
             }
         }
         return nil
     }
 
-    private func pickURL(_ item: [String: Any]) -> String? {
-        for k in ["url", "playUrl", "play_url", "src", "link", "musicUrl"] {
-            if let v = item[k] as? String, !v.isEmpty, v.hasPrefix("http") { return v }
-        }
-        return nil
-    }
-
-    private func titleOf(_ item: [String: Any], fallback: String) -> String {
-        for k in ["title", "name", "songname", "songName"] {
-            if let v = item[k] as? String, !v.isEmpty { return v }
-        }
-        return fallback
-    }
-
-    private func artistOf(_ item: [String: Any]) -> String {
-        for k in ["artist", "singer", "singername", "author"] {
-            if let v = item[k] as? String, !v.isEmpty { return v }
-        }
-        if let arr = item["artists"] as? [[String: Any]] {
-            return arr.compactMap { $0["name"] as? String }.joined(separator: "/")
-        }
-        return "未知歌手"
-    }
-
     // MARK: - 搜索
     func search(_ keyword: String) async throws -> [[String: Any]] {
         let sources = await loadSources()
-        guard let src = sources.first else { throw EngineError.noSource }
-        let r = try await runner(for: src)
 
-        // 兼容多种函数名
-        var lastError: Error = EngineError.scriptMissing("search")
-        for fn in ["search", "musicSearch", "searchMusic", "getSearch"] {
-            do {
-                let raw = try r.call(fn, [keyword])
-                if let list = parseList(raw), !list.isEmpty { return list }
-                // 返回为空，继续试下一个
-            } catch ScriptError.noFunction {
-                continue
-            } catch {
-                lastError = error
+        if let src = sources.first,
+           let r = try? await runner(for: src) {
+            for fn in ["search", "musicSearch", "searchMusic", "getSearch"] {
+                if let raw = try? r.call(fn, [keyword]), let list = parseList(raw), !list.isEmpty {
+                    return list
+                }
             }
         }
-        throw (lastError is ScriptError) ? EngineError.noResult : lastError
+
+        // 脚本不支持搜索（LX 格式）→ 内置搜索
+        status = "内置搜索…"
+        if let list = try? await builtinSearch(keyword), !list.isEmpty { return list }
+        throw EngineError.noResult
+    }
+
+    /// 内置搜索：网易云公开搜索接口
+    private func builtinSearch(_ keyword: String) async throws -> [[String: Any]] {
+        var comps = URLComponents(string: "https://music.163.com/api/search/get/web")!
+        comps.queryItems = [
+            URLQueryItem(name: "s", value: keyword),
+            URLQueryItem(name: "type", value: "1"),
+            URLQueryItem(name: "limit", value: "10"),
+            URLQueryItem(name: "offset", value: "0")
+        ]
+        guard let url = comps.url else { throw EngineError.builtinFailed }
+        var req = URLRequest(url: url, timeoutInterval: 15)
+        req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
+        req.setValue("https://music.163.com/", forHTTPHeaderField: "Referer")
+
+        let (data, _) = try await URLSession.shared.data(for: req)
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let result = obj["result"] as? [String: Any],
+              let songs = result["songs"] as? [[String: Any]] else {
+            throw EngineError.builtinFailed
+        }
+
+        return songs.compactMap { s -> [String: Any]? in
+            guard let id = s["id"] as? Int, let name = s["name"] as? String else { return nil }
+            let artists = (s["artists"] as? [[String: Any]])?.compactMap { $0["name"] as? String } ?? []
+            return [
+                "title": name,
+                "artist": artists.joined(separator: "/"),
+                "id": String(id),
+                "url": "https://music.163.com/song/media/outer/url?id=\(id).mp3"
+            ]
+        }
     }
 
     // MARK: - 播放
@@ -140,22 +138,33 @@ final class MusicEngine: ObservableObject {
     }
 
     func playItem(_ item: [String: Any], keyword: String) async throws {
-        let title = titleOf(item, fallback: keyword)
-        let artist = artistOf(item)
-        var rawUrl = pickURL(item)
+        let title = (item["title"] as? String) ?? (item["name"] as? String) ?? keyword
+        var artist = (item["artist"] as? String) ?? (item["singer"] as? String) ?? ""
+        if artist.isEmpty, let arr = item["artists"] as? [[String: Any]] {
+            artist = arr.compactMap { $0["name"] as? String }.joined(separator: "/")
+        }
+        if artist.isEmpty { artist = "未知歌手" }
 
-        if rawUrl == nil {
-            status = "取播放地址…"
-            let sources = await loadSources()
-            if let src = sources.first {
-                let r = try await runner(for: src)
-                let json = String(data: (try? JSONSerialization.data(withJSONObject: item)) ?? Data("{}".utf8),
-                                  encoding: .utf8) ?? "{}"
-                for fn in ["getUrl", "getMusicUrl", "getPlayUrl"] {
-                    if let s = try? r.call(fn, [json]), s.hasPrefix("http") { rawUrl = s; break }
-                }
+        var rawUrl: String?
+        for k in ["url", "playUrl", "play_url", "src", "link"] {
+            if let v = item[k] as? String, v.hasPrefix("http") { rawUrl = v; break }
+        }
+
+        // 脚本取地址（LX 格式）：先试 getUrl 系列
+        if rawUrl == nil, let src = (await loadSources()).first,
+           let r = try? await runner(for: src) {
+            let json = String(data: (try? JSONSerialization.data(withJSONObject: item)) ?? Data("{}".utf8),
+                              encoding: .utf8) ?? "{}"
+            for fn in ["getUrl", "getMusicUrl", "getPlayUrl"] {
+                if let s = try? r.call(fn, [json]), s.hasPrefix("http") { rawUrl = s; break }
             }
         }
+
+        // 兜底：网易云外链
+        if rawUrl == nil, let id = item["id"] as? String {
+            rawUrl = "https://music.163.com/song/media/outer/url?id=\(id).mp3"
+        }
+
         guard let s = rawUrl, let up = URL(string: s) else { throw EngineError.noUrl }
 
         status = "取播放票据…"
@@ -164,11 +173,10 @@ final class MusicEngine: ObservableObject {
             throw EngineError.noUrl
         }
 
-        // 精确跳转开启时使用完整缓冲
         let precise = UserDefaults.standard.bool(forKey: "preciseSeek")
-        let item0 = AVPlayerItem(url: signed)
-        item0.preferredForwardBufferDuration = precise ? 0 : 3
-        let p = AVPlayer(playerItem: item0)
+        let it = AVPlayerItem(url: signed)
+        it.preferredForwardBufferDuration = precise ? 0 : 3
+        let p = AVPlayer(playerItem: it)
         p.automaticallyWaitsToMinimizeStalling = !precise
         player = p
         current = MusicTrack(title: title, artist: artist, playURL: signed)
