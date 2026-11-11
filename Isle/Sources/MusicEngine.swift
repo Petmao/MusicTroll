@@ -9,7 +9,7 @@ struct MusicTrack: Equatable {
     var cover: String? = nil
 }
 
-/// 音乐引擎：直连 api.irepo.cn/api/wxmusic，不再依赖音源脚本
+/// 音乐引擎：直连 api.irepo.cn/api/wxmusic，带超时/重试
 @MainActor
 final class MusicEngine: ObservableObject {
     static let shared = MusicEngine()
@@ -26,18 +26,38 @@ final class MusicEngine: ObservableObject {
     enum EngineError: Error, LocalizedError {
         case noResult
         case noUrl
+        case timeout
+        case offline
         case api(String)
         var errorDescription: String? {
             switch self {
-            case .noResult: return "没搜到这首歌"
+            case .noResult: return "没搜到这首歌，换个关键词试试"
             case .noUrl: return "接口没返回播放地址"
+            case .timeout: return "接口超时了，再点一次试试"
+            case .offline: return "网络连不上，检查一下网络"
             case .api(let m): return "接口错误：\(m)"
             }
         }
     }
 
-    // MARK: - 搜索（接口一次返回一条）
+    // MARK: - 搜索（带重试）
     func search(_ keyword: String) async throws -> [[String: Any]] {
+        let kw = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !kw.isEmpty else { throw EngineError.noResult }
+
+        var lastError: Error = EngineError.timeout
+        for attempt in 0..<2 {
+            do {
+                return try await requestOnce(kw)
+            } catch {
+                lastError = error
+                if attempt == 0 { try? await Task.sleep(nanoseconds: 800_000_000) }
+            }
+        }
+        throw lastError
+    }
+
+    private func requestOnce(_ keyword: String) async throws -> [[String: Any]] {
         guard var comps = URLComponents(string: apiBase) else { throw EngineError.api("bad_url") }
         comps.queryItems = [
             URLQueryItem(name: "source", value: "third"),
@@ -45,11 +65,23 @@ final class MusicEngine: ObservableObject {
         ]
         guard let url = comps.url else { throw EngineError.api("bad_url") }
 
-        var req = URLRequest(url: url, timeoutInterval: 15)
+        var req = URLRequest(url: url, timeoutInterval: 40)
         req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let data: Data
+        let resp: URLResponse
+        do {
+            (data, resp) = try await URLSession.shared.data(for: req)
+        } catch let e as URLError {
+            switch e.code {
+            case .timedOut: throw EngineError.timeout
+            case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost:
+                throw EngineError.offline
+            default: throw EngineError.api(e.localizedDescription)
+            }
+        }
+
         if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw EngineError.api("HTTP \(http.statusCode)")
         }
@@ -63,11 +95,11 @@ final class MusicEngine: ObservableObject {
         let musicURL = (obj["music_url"] as? String) ?? (obj["link"] as? String) ?? ""
         let cover = (obj["cover"] as? String) ?? ""
 
-        guard code == 200 || !musicURL.isEmpty else {
+        guard !musicURL.isEmpty else {
+            if code == 200 { throw EngineError.noUrl }
             let msg = (obj["msg"] as? String) ?? (obj["message"] as? String) ?? "code \(code)"
             throw EngineError.api(msg)
         }
-        guard !musicURL.isEmpty else { throw EngineError.noUrl }
 
         return [[
             "title": title.isEmpty ? keyword : title,
