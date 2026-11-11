@@ -1,0 +1,21 @@
+# Cirrus CI：开源仓库 macOS 构建免费，不占用 GitHub Actions 额度
+task:
+  name: build-ipa
+  macos_instance:
+    image: ghcr.io/cirruslabs/macos-sonoma-xcode:latest
+
+  install_script: |
+    brew install ldid || true
+    xcodebuild -version
+
+  build_script: |
+    bash build.sh both
+
+  upload_script: |
+    ls -lh Isle-unsigned.ipa Isle.tipa || true
+
+  always:
+    ipa_artifacts:
+      path: "Isle-unsigned.ipa"
+    tipa_artifacts:
+      path: "Isle.tipa"
