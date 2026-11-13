@@ -22,7 +22,7 @@ jobs:
         run: brew install ldid || true
 
       - name: Build unsigned ipa + tipa
-        run: bash build.sh both
+        run: VERSION=1.11.0 bash build.sh both
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
@@ -41,9 +41,10 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.10.0
-          name: 屿声音乐 v1.10.0
+          tag_name: v1.11.0
+          name: 屿声音乐 v1.11.0（品牌区 + 版本号可见）
           body: |
-            - 新增 IsleIcon 统一图标层（SF Symbols，自适应字号与 tint）
-            - 新增 IsleBrandMark 品牌区（岛弧 + 双浪 + 音符、八色流动渐变、错峰闪烁）
+            - 版本号从 1.6.0 提到 1.11.0，装完可在关于页确认
+            - 登录页品牌区：手绘岛弧 + 双浪 + 音符，八色流动渐变与错峰闪烁
+            - 图标统一 IsleIcon（SF Symbols，六档字号，tint 跟随）
           files: Isle.tipa
