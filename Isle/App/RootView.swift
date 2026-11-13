@@ -19,9 +19,10 @@ struct MineTheme {
 struct RootView: View {
     @EnvironmentObject var auth: AuthStore
     @State private var tab = 0
+
     var body: some View {
         ZStack {
-            MineTheme.bg.ignoresSafeArea()
+            IsleBackground()
             VStack(spacing: 0) {
                 content
                 TabBarView(tab: $tab)
@@ -29,28 +30,77 @@ struct RootView: View {
         }
         .preferredColorScheme(.dark)
     }
+
     @ViewBuilder private var content: some View {
-        if tab == 0 { HomeView() }
-        else if tab == 1 {
-            if auth.ent.canUseVideo { EyesView() } else { PaywallView(need: "SVIP", feature: "养眼视频") }
+        if tab == 0 {
+            HomeView()
+        } else if tab == 1 {
+            NavigationView { SearchView() }
+                .navigationViewStyle(StackNavigationViewStyle())
         } else if tab == 2 {
             if auth.ent.canPlayMusic { PlayerView() } else { PaywallView(need: "VIP", feature: "在线听歌") }
-        } else { MineView() }
+        } else if tab == 3 {
+            if auth.ent.canUseVideo { EyesView() } else { PaywallView(need: "SVIP", feature: "养眼视频") }
+        } else {
+            MineView()
+        }
     }
 }
 
 struct TabBarView: View {
     @Binding var tab: Int
+
     var body: some View {
         HStack(spacing: 0) {
-            TabItemView(icon: "house", title: "首页", on: tab == 0) { tab = 0 }
-            TabItemView(icon: "play.rectangle", title: "养眼", on: tab == 1) { tab = 1 }
-            TabItemView(icon: "headphones", title: "播放器", on: tab == 2) { tab = 2 }
-            TabItemView(icon: "person", title: "我的", on: tab == 3) { tab = 3 }
+            cell(IsleSymbol.home, "首页", 0)
+            cell(IsleSymbol.search, "搜索", 1)
+            playButton
+            cell(IsleSymbol.video, "养眼", 3)
+            cell(IsleSymbol.me, "我的", 4)
         }
-        .padding(.top, 9).padding(.bottom, 6)
-        .background(MineTheme.bg)
-        .overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 0.5), alignment: .top)
+        .padding(.horizontal, 4)
+        .frame(height: 62)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color(red: 0.07, green: 0.03, blue: 0.06).opacity(0.94))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+    }
+
+    private func cell(_ symbol: String, _ title: String, _ index: Int) -> some View {
+        Button { tab = index } label: {
+            VStack(spacing: 4) {
+                IsleIcon(symbol, scale: .lg,
+                         tint: tab == index ? IsleColor.pinkLight : Color.white.opacity(0.38))
+                Text(title)
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(tab == index ? IsleColor.pinkLight : Color.white.opacity(0.38))
+            }
+            .padding(.top, 14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var playButton: some View {
+        Button { tab = 2 } label: {
+            ZStack {
+                Circle()
+                    .fill(IsleColor.accent)
+                    .frame(width: 46, height: 46)
+                    .shadow(color: IsleColor.pinkDeep.opacity(0.48), radius: 11, y: 8)
+                IsleIcon(tab == 2 ? IsleSymbol.pause : IsleSymbol.play,
+                         scale: .md, weight: .bold, tint: Color.white)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -62,10 +112,10 @@ struct TabItemView: View {
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 3) {
-                Image(systemName: icon).font(.system(size: 18))
+                IsleIcon(icon, scale: .lg, tint: on ? IsleColor.pink : Color(white: 0.38))
                 Text(title).font(.system(size: 9.5))
+                    .foregroundStyle(on ? IsleColor.pink : Color(white: 0.38))
             }
-            .foregroundColor(on ? MineTheme.pink : Color(white: 0.38))
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(PlainButtonStyle())
@@ -81,7 +131,7 @@ struct MineView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                MineTheme.bg.ignoresSafeArea()
+                IsleBackground()
                 VStack(spacing: 0) {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 0) {
@@ -127,7 +177,6 @@ struct MineView: View {
     }
 }
 
-// MARK: - 歌单导入
 enum MusicPlatform: String, Identifiable, CaseIterable {
     case netease, qq, kugou, kuwo
     var id: String { rawValue }
@@ -176,9 +225,10 @@ struct MineImportRow: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
                 Text("导入歌单").font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white.opacity(0.62))
+                    .foregroundStyle(Color.white.opacity(0.62))
                 Spacer()
-                Text("粘贴链接即可").font(.system(size: 10)).foregroundColor(.white.opacity(0.3))
+                Text("粘贴链接即可").font(.system(size: 10))
+                    .foregroundStyle(Color.white.opacity(0.3))
             }
             HStack(spacing: 8) {
                 ForEach(MusicPlatform.allCases) { p in
@@ -186,14 +236,14 @@ struct MineImportRow: View {
                         VStack(spacing: 6) {
                             Image(systemName: p.icon)
                                 .font(.system(size: 15))
-                                .foregroundColor(.white)
+                                .foregroundStyle(Color.white)
                             Text(p.title)
                                 .font(.system(size: 9.5, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.92))
+                                .foregroundStyle(Color.white.opacity(0.92))
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
-                        .background(RoundedRectangle(cornerRadius: 14)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .fill(LinearGradient(colors: [p.c1, p.c2],
                                                  startPoint: .topLeading, endPoint: .bottomTrailing)))
                     }
@@ -204,7 +254,6 @@ struct MineImportRow: View {
     }
 }
 
-// MARK: - 导入弹窗
 struct PlaylistImportView: View {
     let platform: MusicPlatform
     @Environment(\.dismiss) private var dismiss
@@ -217,18 +266,19 @@ struct PlaylistImportView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                MineTheme.bg.ignoresSafeArea()
+                IsleBackground()
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         Image(systemName: platform.icon).font(.system(size: 15))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .frame(width: 34, height: 34)
-                            .background(RoundedRectangle(cornerRadius: 10)
+                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .fill(LinearGradient(colors: [platform.c1, platform.c2],
                                                      startPoint: .topLeading, endPoint: .bottomTrailing)))
                         VStack(alignment: .leading, spacing: 1) {
                             Text("导入 \(platform.title) 歌单").font(.system(size: 14, weight: .bold))
-                            Text("粘贴歌单分享链接或 ID").font(.system(size: 10.5)).foregroundColor(.gray)
+                            Text("粘贴歌单分享链接或 ID").font(.system(size: 10.5))
+                                .foregroundStyle(IsleColor.textSub)
                         }
                         Spacer()
                     }
@@ -237,7 +287,8 @@ struct PlaylistImportView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
                         .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+                        .background(IsleColor.surfaceHi)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .font(.system(size: 12))
 
                     Button {
@@ -248,11 +299,11 @@ struct PlaylistImportView: View {
                             Text(loading ? "解析中…" : "开始导入")
                                 .font(.system(size: 13, weight: .bold))
                         }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background(RoundedRectangle(cornerRadius: 13)
-                            .fill(LinearGradient(colors: [platform.c1, platform.c2],
-                                                 startPoint: .leading, endPoint: .trailing)))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(IsleColor.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
                     }
                     .disabled(loading)
 
@@ -263,23 +314,25 @@ struct PlaylistImportView: View {
                             Text(message).font(.system(size: 11))
                             Spacer()
                         }
-                        .foregroundColor(ok ? Color(red: 0.30, green: 0.90, blue: 0.66)
-                                            : Color(red: 1, green: 0.62, blue: 0.35))
+                        .foregroundStyle(ok ? IsleColor.mint : IsleColor.gold)
                         .padding(11)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.05)))
+                        .background(IsleColor.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
 
                     Text("导入后歌单会出现在「我的 → 收藏与歌单 → 歌单」，可继续用本 App 播放。")
-                        .font(.system(size: 9.5)).foregroundColor(.white.opacity(0.3))
+                        .font(.system(size: 9.5)).foregroundStyle(Color.white.opacity(0.3))
                     Text("说明：跨平台歌单解析需要服务端 /api/import/playlist 接口；未开通时只会建一个占位歌单。")
-                        .font(.system(size: 9)).foregroundColor(.white.opacity(0.22))
+                        .font(.system(size: 9)).foregroundStyle(Color.white.opacity(0.22))
                     Spacer()
                 }
                 .padding(16)
             }
             .navigationTitle("导入歌单")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } }
+            }
         }
     }
 
@@ -289,7 +342,6 @@ struct PlaylistImportView: View {
         loading = true
         defer { loading = false }
 
-        // 尝试服务端解析（存在就真导入）
         if let rows = try? await APIClient.shared.importPlaylist(source: platform.rawValue, id: id),
            !rows.isEmpty {
             store.lists.append(IslePlaylist(name: "\(platform.title)导入 \(rows.count) 首", songs: rows))
@@ -298,7 +350,6 @@ struct PlaylistImportView: View {
             return
         }
 
-        // 服务端没接口：建占位歌单，提示手动补歌
         store.add("\(platform.title)歌单 \(id.suffix(6))")
         ok = false
         message = "已创建歌单（\(id)），但服务端未开通解析接口，曲目为空"
@@ -318,52 +369,63 @@ struct PlaylistImportView: View {
     }
 }
 
-// MARK: - 会员卡
 struct MineMemberCard: View {
     let nickname: String
     let onSettings: () -> Void
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 11) {
                 Text(String(nickname.prefix(1)))
-                    .font(.system(size: 18, weight: .heavy)).foregroundColor(.white)
+                    .font(.system(size: 18, weight: .heavy)).foregroundStyle(Color.white)
                     .frame(width: 48, height: 48)
-                    .background(Circle().fill(LinearGradient(colors: [MineTheme.gold, MineTheme.pink],
+                    .background(Circle().fill(LinearGradient(colors: [IsleColor.gold, IsleColor.pink],
                                                             startPoint: .topLeading, endPoint: .bottomTrailing)))
-                    .overlay(Circle().stroke(MineTheme.gold.opacity(0.6), lineWidth: 1.5))
+                    .overlay(Circle().stroke(IsleColor.gold.opacity(0.6), lineWidth: 1.5))
+
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(nickname).font(.system(size: 16, weight: .heavy))
-                        Text("SVIP").font(.system(size: 8.5, weight: .black))
-                            .foregroundColor(MineTheme.gold)
+                        Text("SVIP")
+                            .font(.system(size: 8.5, weight: .black))
+                            .foregroundStyle(IsleColor.gold)
                             .padding(.horizontal, 5).padding(.vertical, 2)
-                            .background(RoundedRectangle(cornerRadius: 4).fill(MineTheme.gold.opacity(0.18)))
+                            .background(RoundedRectangle(cornerRadius: 4)
+                                .fill(IsleColor.gold.opacity(0.18)))
                     }
-                    Text("屿声音乐会员").font(.system(size: 11)).foregroundColor(.gray)
+                    Text("屿声音乐会员").font(.system(size: 11))
+                        .foregroundStyle(IsleColor.textSub)
                 }
                 Spacer(minLength: 8)
                 Button(action: onSettings) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 13)).foregroundColor(.white.opacity(0.75))
+                    IsleIcon(IsleSymbol.settings, scale: .sm, tint: Color.white.opacity(0.75))
                         .frame(width: 30, height: 30)
                         .background(Circle().fill(Color.white.opacity(0.08)))
                 }
+                .buttonStyle(.plain)
             }
+
             HStack {
-                Text("本月会员进度").font(.system(size: 10)).foregroundColor(.white.opacity(0.45))
+                Text("本月会员进度").font(.system(size: 10))
+                    .foregroundStyle(Color.white.opacity(0.45))
                 Spacer()
-                Text("还剩 27 天").font(.system(size: 10, weight: .bold)).foregroundColor(MineTheme.gold)
+                Text("还剩 27 天").font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(IsleColor.gold)
             }
             .padding(.top, 10)
+
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.white.opacity(0.10))
-                    Capsule().fill(LinearGradient(colors: [MineTheme.gold, Color(red: 1, green: 0.69, blue: 0.12)],
-                                                 startPoint: .leading, endPoint: .trailing))
+                    Capsule()
+                        .fill(LinearGradient(colors: [IsleColor.gold, Color(red: 1, green: 0.69, blue: 0.12)],
+                                             startPoint: .leading, endPoint: .trailing))
                         .frame(width: g.size.width * 0.62)
                 }
             }
-            .frame(height: 4).padding(.top, 5)
+            .frame(height: 4)
+            .padding(.top, 5)
+
             HStack(spacing: 7) {
                 MineStatCell(title: "收藏", value: "12")
                 MineStatCell(title: "歌单", value: "2")
@@ -373,11 +435,14 @@ struct MineMemberCard: View {
             .padding(.top, 10)
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 20)
-            .fill(LinearGradient(colors: [Color(red: 0.15, green: 0.13, blue: 0.10),
-                                          Color(red: 0.07, green: 0.06, blue: 0.09)],
-                                 startPoint: .topLeading, endPoint: .bottomTrailing)))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(MineTheme.gold.opacity(0.34), lineWidth: 1))
+        .background(
+            LinearGradient(colors: [Color(red: 0.165, green: 0.110, blue: 0.063),
+                                    Color(red: 0.070, green: 0.031, blue: 0.050)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .stroke(IsleColor.gold.opacity(0.34), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .padding(.top, 8)
     }
 }
@@ -387,7 +452,7 @@ struct MineStatCell: View {
     let value: String
     var body: some View {
         VStack(spacing: 3) {
-            Text(title).font(.system(size: 9)).foregroundColor(.white.opacity(0.45))
+            Text(title).font(.system(size: 9)).foregroundStyle(Color.white.opacity(0.45))
             Text(value).font(.system(size: 14, weight: .heavy))
         }
         .frame(maxWidth: .infinity).padding(.vertical, 7)
@@ -401,9 +466,9 @@ struct MineQuickRow: View {
     @Binding var fav: Bool
     var body: some View {
         HStack(spacing: 8) {
-            MinePill(icon: "heart.fill", title: "收藏", color: MineTheme.pink) { fav = true }
-            MinePill(icon: "calendar", title: "签到", color: Color(red: 0.72, green: 0.65, blue: 1)) { checkin = true }
-            MinePill(icon: "person.2.fill", title: "邀请", color: Color(red: 0.30, green: 0.90, blue: 0.66)) { invite = true }
+            MinePill(icon: IsleSymbol.heartFill, title: "收藏", color: IsleColor.pink) { fav = true }
+            MinePill(icon: IsleSymbol.check, title: "签到", color: IsleColor.lilac) { checkin = true }
+            MinePill(icon: IsleSymbol.gift, title: "邀请", color: IsleColor.mint) { invite = true }
         }
     }
 }
@@ -416,10 +481,9 @@ struct MinePill: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 11))
-                Text(title).font(.system(size: 12.5, weight: .semibold))
+                IsleIcon(icon, scale: .sm, tint: color)
+                Text(title).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(color)
             }
-            .foregroundColor(color)
             .frame(maxWidth: .infinity).padding(.vertical, 11)
             .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.05)))
         }
@@ -433,26 +497,27 @@ struct MineRecentRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text("最近播放").font(.system(size: 13, weight: .bold)).foregroundColor(.white.opacity(0.62))
+                Text("最近播放").font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.62))
                 Spacer()
                 Button(action: onClear) {
                     Text("清空").font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(MineTheme.pink)
+                        .foregroundStyle(IsleColor.pink)
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Capsule().fill(Color.white.opacity(0.06)))
                 }
             }
             if names.isEmpty {
-                Text("还没有播放记录").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.3))
+                Text("还没有播放记录").font(.system(size: 10.5))
+                    .foregroundStyle(Color.white.opacity(0.3))
                     .padding(.vertical, 8)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 9) {
                         ForEach(Array(names.enumerated()), id: \.offset) { _, name in
                             VStack(alignment: .leading, spacing: 5) {
-                                RoundedRectangle(cornerRadius: 13)
-                                    .fill(LinearGradient(colors: [Color(red: 1, green: 0.18, blue: 0.47),
-                                                                  Color(red: 1, green: 0.54, blue: 0)],
+                                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                    .fill(LinearGradient(colors: [IsleColor.pinkDeep, IsleColor.pink],
                                                          startPoint: .topLeading, endPoint: .bottomTrailing))
                                     .frame(width: 70, height: 70)
                                 Text(name).font(.system(size: 10, weight: .semibold))
@@ -473,10 +538,10 @@ struct MineGrid: View {
     @Binding var settings: Bool
     var body: some View {
         HStack(spacing: 8) {
-            MineTile(icon: "heart.fill", title: "收藏\n与歌单", color: MineTheme.pink) { fav = true }
-            MineTile(icon: "icloud.fill", title: "云\n同步", color: Color(red: 0.49, green: 0.65, blue: 1)) { cloud = true }
-            MineTile(icon: "iphone", title: "设备\n管理", color: Color(red: 0.61, green: 0.55, blue: 1)) { device = true }
-            MineTile(icon: "gearshape.fill", title: "设置\n中心", color: Color(red: 0.79, green: 0.65, blue: 1)) { settings = true }
+            MineTile(icon: IsleSymbol.heartFill, title: "收藏\n与歌单", color: IsleColor.pink) { fav = true }
+            MineTile(icon: IsleSymbol.cloud, title: "云\n同步", color: Color(red: 0.49, green: 0.65, blue: 1)) { cloud = true }
+            MineTile(icon: IsleSymbol.device, title: "设备\n管理", color: IsleColor.lilac) { device = true }
+            MineTile(icon: IsleSymbol.settings, title: "设置\n中心", color: Color(red: 0.79, green: 0.65, blue: 1)) { settings = true }
         }
     }
 }
@@ -489,9 +554,9 @@ struct MineTile: View {
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 16)).foregroundColor(color)
+                IsleIcon(icon, scale: .md, tint: color)
                 Text(title).font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundStyle(Color.white.opacity(0.8))
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -506,10 +571,11 @@ struct MinePlaylists: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text("我的歌单").font(.system(size: 13, weight: .bold)).foregroundColor(.white.opacity(0.62))
+                Text("我的歌单").font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.62))
                 Spacer()
                 Button(action: onTap) {
-                    Text("＋ 新建").font(.system(size: 11)).foregroundColor(Color(red: 1, green: 0.56, blue: 0.71))
+                    Text("＋ 新建").font(.system(size: 11)).foregroundStyle(IsleColor.pinkLight)
                 }
             }
             HStack(spacing: 9) {
@@ -527,13 +593,12 @@ struct MinePlaylistCell: View {
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 5) {
-                RoundedRectangle(cornerRadius: 13)
-                    .fill(LinearGradient(colors: [Color(red: 0.48, green: 0.36, blue: 1),
-                                                  Color(red: 0, green: 0.83, blue: 1)],
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(LinearGradient(colors: [IsleColor.lilac, IsleColor.mint],
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(height: 86)
                 Text(name).font(.system(size: 11.5, weight: .bold)).lineLimit(1)
-                Text(subtitle).font(.system(size: 9)).foregroundColor(.gray).lineLimit(1)
+                Text(subtitle).font(.system(size: 9)).foregroundStyle(IsleColor.textSub).lineLimit(1)
             }
             .frame(maxWidth: .infinity)
         }
@@ -546,17 +611,17 @@ struct MineSettingsRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 11) {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 13)).foregroundColor(.white.opacity(0.7))
+                IsleIcon(IsleSymbol.settings, scale: .sm, tint: Color.white.opacity(0.7))
                     .frame(width: 30, height: 30)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.10)))
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.10)))
                 VStack(alignment: .leading, spacing: 1) {
                     Text("设置").font(.system(size: 13, weight: .semibold))
                     Text("音源 · 视频源 · 精确跳转 · 退出登录")
-                        .font(.system(size: 11)).foregroundColor(.gray)
+                        .font(.system(size: 11)).foregroundStyle(IsleColor.textSub)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(.white.opacity(0.3))
+                IsleIcon(IsleSymbol.arrowRight, scale: .sm, tint: Color.white.opacity(0.3))
             }
             .padding(.vertical, 9).padding(.horizontal, 11)
             .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.05)))
