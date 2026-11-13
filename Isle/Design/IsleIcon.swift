@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct IsleIcon: View {
-    enum Scale: CGFloat {
+    enum Scale: Double {
         case xs = 11, sm = 13, md = 16, lg = 20, xl = 26, hero = 34
     }
 
@@ -21,7 +21,7 @@ struct IsleIcon: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: scale.rawValue, weight: weight))
+            .font(.system(size: CGFloat(scale.rawValue), weight: weight))
             .symbolRenderingMode(.hierarchical)
             .foregroundStyle(tint ?? Color.primary)
             .frame(width: box, height: box)

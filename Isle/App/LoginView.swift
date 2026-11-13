@@ -61,28 +61,8 @@ struct LoginView: View {
 
     // MARK: - 头部
     private var header: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 28)
-                    .fill(LinearGradient(colors: [Color(red: 1, green: 0.24, blue: 0.47),
-                                                  Color(red: 1, green: 0.62, blue: 0.2)],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 92, height: 92)
-                    .shadow(color: Color(red: 1, green: 0.24, blue: 0.47).opacity(0.45), radius: 24, y: 10)
-                Image(systemName: "music.note")
-                    .font(.system(size: 40, weight: .semibold))
-                    .foregroundStyle(Color.white)
-            }
-            Text(Config.appName).font(.system(size: 26, weight: .heavy))
-            Text(Config.appNameEn.uppercased())
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(4)
-                .foregroundStyle(Color.white.opacity(0.35))
-            Text(Config.tagline)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.5))
-                .padding(.top, 2)
-        }
+        IsleBrandMark()
+            .padding(.top, 6)
     }
 
     // MARK: - 切换
@@ -119,7 +99,7 @@ struct LoginView: View {
         .buttonStyle(PlainButtonStyle())
     }
 
-    // MARK: - 输入行（始终在视图树里，只切显示，避免 iOS 15 焦点重建崩溃）
+    // MARK: - 输入行
     @ViewBuilder
     private func row(_ title: String, _ binding: Binding<String>, _ symbol: String,
                      _ id: Field, secure: Bool, visible: Bool) -> some View {

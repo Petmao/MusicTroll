@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
@@ -34,3 +37,13 @@ jobs:
           name: Isle-tipa
           path: Isle.tipa
           if-no-files-found: warn
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.10.0
+          name: 屿声音乐 v1.10.0
+          body: |
+            - 新增 IsleIcon 统一图标层（SF Symbols，自适应字号与 tint）
+            - 新增 IsleBrandMark 品牌区（岛弧 + 双浪 + 音符、八色流动渐变、错峰闪烁）
+          files: Isle.tipa
