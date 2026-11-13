@@ -175,6 +175,27 @@ struct SettingsView: View {
     private var audioCard: some View {
         VStack(alignment: .leading, spacing: 9) {
             sectionLabel("音频设置")
+
+            NavigationLink(destination: EqualizerView()) {
+                HStack(spacing: 10) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(IsleColor.pink.opacity(0.16))
+                            .frame(width: 34, height: 34)
+                        IsleIcon(IsleSymbol.music, scale: .sm, tint: IsleColor.pinkLight)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("音效与倍速").font(.system(size: 13, weight: .semibold))
+                        Text("十段 EQ · 0.5x–2x")
+                            .font(.system(size: 10.5)).foregroundStyle(IsleColor.textSub)
+                    }
+                    Spacer(minLength: 6)
+                    IsleIcon(IsleSymbol.arrowRight, scale: .sm, tint: Color.white.opacity(0.3))
+                }
+            }
+
+            Divider().background(Color.white.opacity(0.06))
+
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("精确跳转").font(.system(size: 13, weight: .semibold))
