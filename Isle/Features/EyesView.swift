@@ -1,7 +1,6 @@
 import SwiftUI
 import AVFoundation
 
-/// 养眼：全屏占满，单条循环，上下滑切换源
 struct EyesView: View {
     @EnvironmentObject var auth: AuthStore
     @State private var sources: [SourceItem] = []
@@ -52,19 +51,36 @@ struct EyesView: View {
 
     private var emptyState: some View {
         ZStack {
-            RadialGradient(colors: [MineTheme.pink.opacity(0.35), .clear],
+            IsleColor.bg.ignoresSafeArea()
+            RadialGradient(colors: [IsleColor.pink.opacity(0.32), .clear],
                            center: .center, startRadius: 10, endRadius: 260)
                 .ignoresSafeArea()
-            VStack(spacing: 10) {
+
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(RadialGradient(colors: [IsleColor.pink.opacity(0.22), .clear],
+                                             center: .center, startRadius: 2, endRadius: 62))
+                        .frame(width: 132, height: 132)
+                    IsleIcon(IsleSymbol.video, scale: .hero, tint: IsleColor.pinkLight)
+                }
+
                 Text("请到设置里面设置视频源")
-                    .font(.system(size: 17, weight: .bold)).foregroundColor(.white)
+                    .font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+                    .padding(.top, 4)
+
                 Text("开启新视界哟")
                     .font(.system(size: 24, weight: .heavy)).tracking(1)
-                    .foregroundColor(Color(red: 1, green: 0.62, blue: 0.72))
+                    .foregroundStyle(
+                        LinearGradient(colors: [IsleColor.pinkLight, IsleColor.lilac],
+                                       startPoint: .leading, endPoint: .trailing)
+                    )
+
                 Capsule()
-                    .fill(LinearGradient(colors: [.clear, MineTheme.pink, .clear],
+                    .fill(LinearGradient(colors: [.clear, IsleColor.pink, .clear],
                                          startPoint: .leading, endPoint: .trailing))
                     .frame(width: 34, height: 2).padding(.vertical, 8)
+
                 if auth.ent.canManageSources {
                     NavigationLink(destination: VideoSourceSettingsView()) {
                         Text("去设置")
@@ -73,11 +89,11 @@ struct EyesView: View {
                             .background(Color.white.opacity(0.10))
                             .overlay(Capsule().stroke(Color.white.opacity(0.20), lineWidth: 1))
                             .clipShape(Capsule())
-                            .foregroundColor(.white)
+                            .foregroundStyle(.white)
                     }
                 } else {
                     Text("暂无可用视频，稍后再试")
-                        .font(.system(size: 11)).foregroundColor(.white.opacity(0.4))
+                        .font(.system(size: 11)).foregroundStyle(Color.white.opacity(0.4))
                 }
             }
         }
@@ -85,11 +101,11 @@ struct EyesView: View {
     }
 
     private var notDirectLink: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "film").font(.system(size: 34)).foregroundColor(.white.opacity(0.4))
+        VStack(spacing: 10) {
+            IsleIcon(IsleSymbol.video, scale: .hero, tint: Color.white.opacity(0.4))
             Text(sources[min(index, sources.count - 1)].name)
-                .font(.system(size: 13, weight: .semibold)).foregroundColor(.white.opacity(0.8))
-            Text("该源不是直链视频").font(.system(size: 10.5)).foregroundColor(.white.opacity(0.35))
+                .font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.white.opacity(0.8))
+            Text("该源不是直链视频").font(.system(size: 10.5)).foregroundStyle(Color.white.opacity(0.35))
         }
     }
 
@@ -106,7 +122,6 @@ struct EyesView: View {
         prepare(next)
     }
 
-    /// 单条循环：AVQueuePlayer + AVPlayerLooper，无黑屏续播
     private func prepare(_ i: Int) {
         guard !sources.isEmpty else { return }
         index = max(0, min(i, sources.count - 1))
@@ -130,7 +145,6 @@ struct EyesView: View {
     }
 }
 
-/// AVPlayerLayer 包装（铺满，不变形）
 struct VideoSurface: UIViewRepresentable {
     let player: AVPlayer
 
