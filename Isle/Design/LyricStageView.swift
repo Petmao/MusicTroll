@@ -7,6 +7,7 @@ struct LyricStageView: View {
     var artist: String
     var stateText: String
     var liked: Bool
+    var expanded: Bool
     var onSeek: (Double) -> Void
     var onMore: () -> Void
     var onLike: () -> Void
@@ -41,6 +42,9 @@ struct LyricStageView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 19) {
                     creditBlock
+                        .opacity(expanded ? 1 : 0)
+                        .offset(y: expanded ? 0 : 14)
+                        .animation(.easeOut(duration: 0.32), value: expanded)
                         .id(-1)
 
                     ForEach(Array(lines.enumerated()), id: \.element.id) { i, line in
@@ -92,6 +96,8 @@ struct LyricStageView: View {
 
     private func lyricRow(_ i: Int, _ line: LyricLine) -> some View {
         let active = i == currentIndex
+        let delay = min(Double(i), 18) * 0.055
+
         return Button {
             onSeek(line.time)
         } label: {
@@ -102,6 +108,9 @@ struct LyricStageView: View {
                 .shadow(color: active ? Color(red: 1, green: 0.62, blue: 0.78).opacity(0.55) : .clear, radius: 22)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
+                .opacity(expanded ? 1 : 0)
+                .offset(y: expanded ? 0 : 14)
+                .animation(.easeOut(duration: 0.32).delay(delay), value: expanded)
                 .id(i)
         }
         .buttonStyle(.plain)

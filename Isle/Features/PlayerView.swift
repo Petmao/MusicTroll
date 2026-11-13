@@ -9,7 +9,7 @@ struct PlayerView: View {
     @State private var showQueue = false
     @State private var likes = 0
     @State private var comments = 0
-    @State private var dragStart: Date?
+    @State private var ticker: Timer?
 
     private var title: String { engine.current?.title ?? "未选择歌曲" }
     private var artist: String { engine.current?.artist ?? "去搜索或点一首歌" }
@@ -49,20 +49,20 @@ struct PlayerView: View {
                         isPlaying: engine.isPlaying,
                         onShuffle: { showQueue = true },
                         onPrev: { engine.seek(to: max(0, engine.progress - 0.05)) },
-                        onPlayPause: {
-                            engine.toggle()
-                            if engine.isPlaying { startSpin() }
-                        },
+                        onPlayPause: { engine.toggle() },
                         onNext: { engine.seek(to: min(1, engine.progress + 0.05)) },
                         onQueue: { showQueue = true }
                     )
+                    .padding(.bottom, 25)
 
                     homeBar
-                        .padding(.top, showLyric ? 12 : 18)
+                        .padding(.bottom, 7)
                 }
                 .padding(.top, 42)
+                .frame(height: geo.size.height, alignment: .top)
             }
         }
+        .ignoresSafeArea(edges: .bottom)
         .sheet(isPresented: $showQueue) { PlaylistSheet() }
         .gesture(
             DragGesture(minimumDistance: 40)
@@ -74,10 +74,8 @@ struct PlayerView: View {
                     }
                 }
         )
-        .onChange(of: engine.isPlaying) { playing in
-            if playing { startSpin() }
-        }
-        .onAppear { if engine.isPlaying { startSpin() } }
+        .onAppear { startTicker() }
+        .onDisappear { ticker?.invalidate() }
     }
 
     // MARK: - 顶部栏
@@ -178,6 +176,7 @@ struct PlayerView: View {
                 artist: artist,
                 stateText: engine.lyricState,
                 liked: liked,
+                expanded: showLyric,
                 onSeek: { engine.seek(toSeconds: $0) },
                 onMore: { showQueue = true },
                 onLike: { toggleLike() },
@@ -190,13 +189,12 @@ struct PlayerView: View {
         }
     }
 
-    // MARK: - 其余
+    // MARK: - 辅助
 
     private var homeBar: some View {
         Capsule()
             .fill(PlayerTheme.homeBar)
             .frame(width: 126, height: 3)
-            .padding(.bottom, 7)
     }
 
     private var bufferRatio: Double {
@@ -216,10 +214,15 @@ struct PlayerView: View {
         }
     }
 
-    private func startSpin() {
-        angle = 0
-        withAnimation(.linear(duration: 9).repeatForever(autoreverses: false)) {
-            angle = 360
+    /// 30 fps 累加角度：暂停时不再自增，因此停在当前角度而不是归零
+    private func startTicker() {
+        ticker?.invalidate()
+        ticker = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { _ in
+            Task { @MainActor in
+                guard engine.isPlaying else { return }
+                angle += 360.0 / 9.0 / 30.0
+                if angle >= 360 { angle -= 360 }
+            }
         }
     }
 }
