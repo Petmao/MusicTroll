@@ -9,7 +9,7 @@ struct MusicTrack: Equatable {
     var cover: String? = nil
 }
 
-/// 音乐引擎：AVPlayer 播流 + 本地缓存优先 + AVAudioSession 配好 + 失败可见
+/// 音乐引擎：本地文件走 AudioFX（带 EQ/变速），远程流走 AVPlayer；搜索走后端接口
 @MainActor
 final class MusicEngine: ObservableObject {
     static let shared = MusicEngine()
@@ -23,6 +23,7 @@ final class MusicEngine: ObservableObject {
     private var player: AVPlayer?
     private var ticker: Timer?
     private var itemObs: NSKeyValueObservation?
+    private var usingFX = false
     private let apiBase = "https://api.irepo.cn/api/wxmusic"
 
     enum EngineError: Error, LocalizedError {
@@ -39,7 +40,6 @@ final class MusicEngine: ObservableObject {
         }
     }
 
-    // MARK: - 音频会话
     private func configureSession() {
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetoothA2DP])
@@ -47,6 +47,7 @@ final class MusicEngine: ObservableObject {
     }
 
     // MARK: - 搜索
+
     func search(_ keyword: String) async throws -> [[String: Any]] {
         let kw = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !kw.isEmpty else { throw EngineError.noResult }
@@ -102,6 +103,7 @@ final class MusicEngine: ObservableObject {
     }
 
     // MARK: - 播放
+
     func play(keyword: String) async {
         status = "搜索中…"
         do {
@@ -131,11 +133,30 @@ final class MusicEngine: ObservableObject {
         }
 
         let precise = UserDefaults.standard.bool(forKey: "preciseSeek")
-
-        // 缓存优先：命中直接播本地文件
         let cached = PlaybackCache.shared.cachedURL(for: playURL)
-        let source = cached ?? playURL
+        let cover = item["cover"] as? String
 
+        // 本地文件优先：走 AudioFX，可加 EQ 与变速
+        if let local = cached, AudioFX.shared.load(local) {
+            usingFX = true
+            player?.pause()
+            player = nil
+            itemObs = nil
+
+            current = MusicTrack(title: title, artist: artist, playURL: local, cover: cover)
+            duration = AudioFX.shared.duration
+            progress = 0
+            AudioFX.shared.play()
+            isPlaying = true
+            status = "正在播放（本地·音效）"
+            startTick()
+            return
+        }
+
+        usingFX = false
+        AudioFX.shared.stop()
+
+        let source = playURL
         let asset = AVURLAsset(url: source, options: [AVURLAssetPreferPreciseDurationAndTimingKey: precise])
         let it = AVPlayerItem(asset: asset)
         it.preferredForwardBufferDuration = precise ? 0 : 3
@@ -152,7 +173,7 @@ final class MusicEngine: ObservableObject {
                 case .readyToPlay:
                     self.duration = item.duration.seconds.isFinite ? item.duration.seconds : 0
                     if self.status.hasPrefix("取播放") || self.status == "就绪" {
-                        self.status = cached == nil ? "正在播放" : "正在播放（本地）"
+                        self.status = "正在播放"
                     }
                 default: break
                 }
@@ -160,26 +181,44 @@ final class MusicEngine: ObservableObject {
         }
 
         player = p
-        current = MusicTrack(title: title, artist: artist, playURL: source,
-                             cover: item["cover"] as? String)
+        current = MusicTrack(title: title, artist: artist, playURL: source, cover: cover)
         p.play()
         isPlaying = true
-        status = cached == nil ? "正在播放" : "正在播放（本地）"
+        status = "正在播放"
         startTick()
 
-        // 未命中则在后台把完整文件落盘，下次直接本地播
         if cached == nil {
             PlaybackCache.shared.download(playURL)
         }
     }
 
     func toggle() {
+        if usingFX {
+            if AudioFX.shared.isPlaying {
+                AudioFX.shared.pause()
+            } else {
+                AudioFX.shared.play()
+            }
+            isPlaying = AudioFX.shared.isPlaying
+            status = isPlaying ? "正在播放（本地·音效）" : "已暂停"
+            return
+        }
+
         guard let p = player else { return }
         if isPlaying { p.pause() } else { p.play() }
         isPlaying.toggle()
     }
 
     func seek(to ratio: Double) {
+        if usingFX {
+            let d = AudioFX.shared.duration
+            guard d > 0 else { return }
+            let target = min(1, max(0, ratio))
+            AudioFX.shared.seek(to: d * target)
+            progress = target
+            return
+        }
+
         guard let p = player, let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 else { return }
         p.seek(to: CMTime(seconds: d * ratio, preferredTimescale: 600))
         progress = ratio
@@ -189,7 +228,20 @@ final class MusicEngine: ObservableObject {
         ticker?.invalidate()
         ticker = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self = self, let p = self.player else { return }
+                guard let self = self else { return }
+
+                if self.usingFX {
+                    let t = AudioFX.shared.currentTime
+                    let d = AudioFX.shared.duration
+                    if d > 0 {
+                        self.duration = d
+                        self.progress = min(1, max(0, t / d))
+                    }
+                    self.isPlaying = AudioFX.shared.isPlaying
+                    return
+                }
+
+                guard let p = self.player else { return }
                 let t = p.currentTime().seconds
                 let d = p.currentItem?.duration.seconds ?? 0
                 if d.isFinite, d > 0 {
@@ -197,7 +249,7 @@ final class MusicEngine: ObservableObject {
                     self.progress = min(1, max(0, t / d))
                 }
                 self.isPlaying = (p.timeControlStatus == .playing)
-                if self.isPlaying && self.status != "正在播放" && self.status != "正在播放（本地）" {
+                if self.isPlaying && self.status != "正在播放" && self.status != "正在播放（本地·音效）" {
                     self.status = "正在播放"
                 }
             }
