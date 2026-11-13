@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 进度条：2 pt 轨道 + 缓冲段 + 7 pt 播放头 + 5 pt 缓冲点 + 三分时间行
 struct PlayerProgressView: View {
     var progress: Double
     var buffer: Double
@@ -75,7 +74,6 @@ struct PlayerProgressView: View {
     }
 }
 
-/// 社交区：空心心形 24 + 气泡 23，数字 9 pt
 struct PlayerSocialView: View {
     var likes: Int
     var comments: Int
@@ -116,7 +114,6 @@ struct PlayerSocialView: View {
     }
 }
 
-/// 控制区：五项均分，播放键是纯三角 22 × 28
 struct PlayerControlsView: View {
     var isPlaying: Bool
     var onShuffle: () -> Void
@@ -152,7 +149,7 @@ struct PlayerControlsView: View {
             .buttonStyle(.plain)
 
             Button(action: onQueue) {
-                IsleIcon(IsleSymbol.list, scale: .lg, tint: PlayerTheme.ctrlMid)
+                IsleIcon("list.bullet", scale: .lg, tint: PlayerTheme.ctrlMid)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
