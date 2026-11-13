@@ -1,15 +1,13 @@
 import SwiftUI
 import UIKit
 
-/// 首页背景：已关闭网络图，改为纯深色渐变 + 网格（稳定、不耗流量）
+/// 首页背景：纯深色渐变 + 网格（已停止使用网络图）
 @MainActor
 final class HomeBackground: ObservableObject {
     static let shared = HomeBackground()
     @Published var image: UIImage?
 
-    func refresh() async {
-        // 网络背景已停用
-    }
+    func refresh() async { }
 
     func clear() {
         image = nil
@@ -21,20 +19,19 @@ struct HomeBackgroundView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.055, green: 0.07, blue: 0.11),
-                                    Color(red: 0.02, green: 0.03, blue: 0.05)],
+            LinearGradient(colors: [Color(red: 0.106, green: 0.039, blue: 0.090),
+                                    Color(red: 0.039, green: 0.020, blue: 0.039),
+                                    Color(red: 0.031, green: 0.016, blue: 0.031)],
                            startPoint: .top, endPoint: .bottom)
 
-            // 顶部青光雾
-            RadialGradient(colors: [Color(red: 0, green: 0.72, blue: 1).opacity(0.16), .clear],
+            RadialGradient(colors: [IsleColor.pink.opacity(0.26), .clear],
                            center: UnitPoint(x: 0.18, y: 0.05),
                            startRadius: 10, endRadius: 320)
-            // 底部紫光雾
-            RadialGradient(colors: [Color(red: 0.55, green: 0.31, blue: 1).opacity(0.14), .clear],
+
+            RadialGradient(colors: [IsleColor.lilac.opacity(0.16), .clear],
                            center: UnitPoint(x: 0.88, y: 0.92),
                            startRadius: 10, endRadius: 300)
 
-            // 网格
             GeometryReader { g in
                 Path { p in
                     let step: CGFloat = 26
@@ -51,9 +48,7 @@ struct HomeBackgroundView: View {
                         y += step
                     }
                 }
-                .stroke(Color(red: 0, green: 0.84, blue: 1).opacity(0.055), lineWidth: 0.5)
-                .mask(LinearGradient(colors: [.clear, .black, .black],
-                                     startPoint: .top, endPoint: .bottom))
+                .stroke(Color.white.opacity(0.025), lineWidth: 0.5)
             }
         }
         .ignoresSafeArea()

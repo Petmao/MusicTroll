@@ -21,7 +21,7 @@ struct ArtistAvatar: View {
                 gradient.overlay(
                     Text(String(name.prefix(1)))
                         .font(.system(size: size * 0.4, weight: .heavy))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 )
             }
         }
@@ -33,18 +33,24 @@ struct ArtistAvatar: View {
 
     private var gradient: LinearGradient {
         let pairs: [[Color]] = [
-            [Color(red: 1, green: 0.62, blue: 0.35), Color(red: 0.76, green: 0.25, blue: 0.45)],
-            [Color(red: 0.48, green: 0.36, blue: 1), Color(red: 0, green: 0.83, blue: 1)],
-            [Color(red: 0, green: 0.88, blue: 0.64), Color(red: 0, green: 0.64, blue: 1)],
-            [Color(red: 1, green: 0.82, blue: 0.25), Color(red: 1, green: 0.18, blue: 0.47)]
+            [IsleColor.pinkLight, IsleColor.pink],
+            [IsleColor.lilac, IsleColor.pinkDeep],
+            [IsleColor.mint, IsleColor.lilac],
+            [IsleColor.gold, IsleColor.pink]
         ]
         return LinearGradient(colors: pairs[abs(name.hashValue) % 4],
                               startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
     private func load() async {
-        guard let s = urlString, !s.isEmpty, let url = URL(string: s) else { image = nil; return }
-        if let cached = Self.cache.object(forKey: s as NSString) { image = cached; return }
+        guard let s = urlString, !s.isEmpty, let url = URL(string: s) else {
+            image = nil
+            return
+        }
+        if let cached = Self.cache.object(forKey: s as NSString) {
+            image = cached
+            return
+        }
         loading = true
         defer { loading = false }
         if let (data, _) = try? await URLSession.shared.data(from: url),

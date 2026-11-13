@@ -9,7 +9,7 @@ struct MusicTrack: Equatable {
     var cover: String? = nil
 }
 
-/// 音乐引擎：直连 api.irepo.cn/api/wxmusic + AVAudioSession 配好 + 失败可见
+/// 音乐引擎：AVPlayer 播流 + 本地缓存优先 + AVAudioSession 配好 + 失败可见
 @MainActor
 final class MusicEngine: ObservableObject {
     static let shared = MusicEngine()
@@ -39,7 +39,7 @@ final class MusicEngine: ObservableObject {
         }
     }
 
-    // MARK: - 音频会话（关键：不设会没声音）
+    // MARK: - 音频会话
     private func configureSession() {
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetoothA2DP])
@@ -124,7 +124,6 @@ final class MusicEngine: ObservableObject {
         configureSession()
 
         status = "取播放地址…"
-        // 先用签名流（https），失败则退回原地址
         var playURL = up
         if let ticket = try? await APIClient.shared.playTicket(url: up.absoluteString, kind: "audio"),
            let signed = URL(string: ticket.path, relativeTo: APIClient.shared.baseURL)?.absoluteURL {
@@ -132,7 +131,13 @@ final class MusicEngine: ObservableObject {
         }
 
         let precise = UserDefaults.standard.bool(forKey: "preciseSeek")
-        let it = AVPlayerItem(url: playURL)
+
+        // 缓存优先：命中直接播本地文件
+        let cached = PlaybackCache.shared.cachedURL(for: playURL)
+        let source = cached ?? playURL
+
+        let asset = AVURLAsset(url: source, options: [AVURLAssetPreferPreciseDurationAndTimingKey: precise])
+        let it = AVPlayerItem(asset: asset)
         it.preferredForwardBufferDuration = precise ? 0 : 3
         let p = AVPlayer(playerItem: it)
         p.automaticallyWaitsToMinimizeStalling = !precise
@@ -146,19 +151,26 @@ final class MusicEngine: ObservableObject {
                     self.isPlaying = false
                 case .readyToPlay:
                     self.duration = item.duration.seconds.isFinite ? item.duration.seconds : 0
-                    if self.status.hasPrefix("取播放") || self.status == "就绪" { self.status = "正在播放" }
+                    if self.status.hasPrefix("取播放") || self.status == "就绪" {
+                        self.status = cached == nil ? "正在播放" : "正在播放（本地）"
+                    }
                 default: break
                 }
             }
         }
 
         player = p
-        current = MusicTrack(title: title, artist: artist, playURL: playURL,
+        current = MusicTrack(title: title, artist: artist, playURL: source,
                              cover: item["cover"] as? String)
         p.play()
         isPlaying = true
-        status = "正在播放"
+        status = cached == nil ? "正在播放" : "正在播放（本地）"
         startTick()
+
+        // 未命中则在后台把完整文件落盘，下次直接本地播
+        if cached == nil {
+            PlaybackCache.shared.download(playURL)
+        }
     }
 
     func toggle() {
@@ -185,7 +197,9 @@ final class MusicEngine: ObservableObject {
                     self.progress = min(1, max(0, t / d))
                 }
                 self.isPlaying = (p.timeControlStatus == .playing)
-                if self.isPlaying && self.status != "正在播放" { self.status = "正在播放" }
+                if self.isPlaying && self.status != "正在播放" && self.status != "正在播放（本地）" {
+                    self.status = "正在播放"
+                }
             }
         }
     }
