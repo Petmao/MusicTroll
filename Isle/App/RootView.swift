@@ -7,8 +7,6 @@ final class MineRouter: ObservableObject {
     @Published var fav = false
     @Published var cloud = false
     @Published var device = false
-    @Published var musicSource = false
-    @Published var videoSource = false
     @Published var redeem = false
 }
 
@@ -135,6 +133,7 @@ struct MineView: View {
     @StateObject private var r = MineRouter()
     @State private var points = 0
     @State private var pointsLoaded = false
+    @State private var importSource: MusicPlatform?
 
     private var nickname: String { auth.user?.nickname ?? "未登录" }
     private var uid: String {
@@ -150,7 +149,15 @@ struct MineView: View {
                     VStack(spacing: 12) {
                         MineHeader(nickname: nickname, uid: uid, points: points, loaded: pointsLoaded)
                         MineMemberCard(nickname: nickname) { r.redeem = true }
-                        MineGrid(fav: $r.fav, cloud: $r.cloud, device: $r.device, settings: $r.settings)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("导入歌单")
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(1)
+                                .foregroundStyle(Color.white.opacity(0.5))
+                            MineGrid { p in importSource = p }
+                        }
+
                         MineSectionList(router: r)
                     }
                     .padding(.horizontal, 16)
@@ -160,6 +167,9 @@ struct MineView: View {
             }
             .navigationBarHidden(true)
             .background(links)
+            .sheet(item: $importSource) { p in
+                PlaylistImportView(platform: p)
+            }
             .task { await loadPoints() }
         }
         .navigationViewStyle(StackNavigationViewStyle())
@@ -173,8 +183,6 @@ struct MineView: View {
             NavigationLink(destination: LibraryView(), isActive: $r.fav) { EmptyView() }
             NavigationLink(destination: CloudSyncView(), isActive: $r.cloud) { EmptyView() }
             NavigationLink(destination: DeviceView(), isActive: $r.device) { EmptyView() }
-            NavigationLink(destination: MusicSourceSettingsView(), isActive: $r.musicSource) { EmptyView() }
-            NavigationLink(destination: VideoSourceSettingsView(), isActive: $r.videoSource) { EmptyView() }
             NavigationLink(destination: PaywallView(need: "会员", feature: "卡密兑换"), isActive: $r.redeem) { EmptyView() }
         }
         .hidden()
@@ -332,50 +340,32 @@ struct MineMemberCard: View {
 }
 
 struct MineGrid: View {
-    @Binding var fav: Bool
-    @Binding var cloud: Bool
-    @Binding var device: Bool
-    @Binding var settings: Bool
+    let onPick: (MusicPlatform) -> Void
 
     var body: some View {
         HStack(spacing: 8) {
-            MineTile(icon: IsleSymbol.heartFill, title: "收藏\n与歌单", color: IsleColor.pink) { fav = true }
-            MineTile(icon: IsleSymbol.cloud, title: "云\n同步", color: Color(red: 0.49, green: 0.65, blue: 1)) { cloud = true }
-            MineTile(icon: IsleSymbol.device, title: "设备\n管理", color: IsleColor.lilac) { device = true }
-            MineTile(icon: IsleSymbol.settings, title: "设置\n中心", color: Color(red: 0.79, green: 0.65, blue: 1)) { settings = true }
-        }
-    }
-}
-
-struct MineTile: View {
-    let icon: String
-    let title: String
-    let color: Color
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(color.opacity(0.14))
-                        .frame(width: 32, height: 32)
-                    IsleIcon(icon, scale: .sm, tint: color)
+            ForEach(MusicPlatform.allCases) { p in
+                Button { onPick(p) } label: {
+                    VStack(spacing: 7) {
+                        Image(systemName: p.icon)
+                            .font(.system(size: 17))
+                            .foregroundStyle(Color.white)
+                        Text(p.shortTitle)
+                            .font(.system(size: 9.5, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.95))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(colors: [p.c1, p.c2],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.82))
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(1)
+                .buttonStyle(.plain)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(IsleColor.surface)
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(IsleColor.line, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .buttonStyle(.plain)
     }
 }
 
@@ -384,6 +374,9 @@ struct MineSectionList: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            MineSectionRow(icon: IsleSymbol.heartFill, title: "收藏与歌单",
+                           detail: "收藏的歌曲 · 我的歌单", tint: IsleColor.pink) { router.fav = true }
+            divider
             MineSectionRow(icon: IsleSymbol.check, title: "签到积分",
                            detail: "每日签到 · 兑换会员", tint: IsleColor.gold) { router.checkin = true }
             divider
@@ -396,11 +389,8 @@ struct MineSectionList: View {
             MineSectionRow(icon: IsleSymbol.device, title: "设备管理",
                            detail: "已绑定设备 · 解绑", tint: IsleColor.lilac) { router.device = true }
             divider
-            MineSectionRow(icon: IsleSymbol.music, title: "音乐音源",
-                           detail: "优先级与延迟测试", tint: IsleColor.pink) { router.musicSource = true }
-            divider
-            MineSectionRow(icon: IsleSymbol.video, title: "视频源",
-                           detail: "养眼页播放源", tint: Color(red: 0.95, green: 0.55, blue: 0.38)) { router.videoSource = true }
+            MineSectionRow(icon: IsleSymbol.settings, title: "设置中心",
+                           detail: "音源 · 播放 · 退出登录", tint: Color(red: 0.79, green: 0.65, blue: 1)) { router.settings = true }
         }
         .background(IsleColor.surface)
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -451,5 +441,168 @@ struct MineSectionRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+enum MusicPlatform: String, Identifiable, CaseIterable {
+    case netease, qq, kugou, soda
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .netease: return "网易云音乐"
+        case .qq: return "QQ 音乐"
+        case .kugou: return "酷狗音乐"
+        case .soda: return "汽水音乐"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .netease: return "网易云"
+        case .qq: return "QQ"
+        case .kugou: return "酷狗"
+        case .soda: return "汽水"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .netease: return "cloud.fill"
+        case .qq: return "music.note.list"
+        case .kugou: return "waveform.circle.fill"
+        case .soda: return "music.note"
+        }
+    }
+
+    var c1: Color {
+        switch self {
+        case .netease: return Color(red: 0.90, green: 0.16, blue: 0.20)
+        case .qq: return Color(red: 0.19, green: 0.72, blue: 0.35)
+        case .kugou: return Color(red: 0.13, green: 0.55, blue: 1.00)
+        case .soda: return Color(red: 0.98, green: 0.72, blue: 0.12)
+        }
+    }
+
+    var c2: Color {
+        switch self {
+        case .netease: return Color(red: 1.00, green: 0.45, blue: 0.30)
+        case .qq: return Color(red: 0.12, green: 0.52, blue: 0.95)
+        case .kugou: return Color(red: 0.36, green: 0.85, blue: 1.00)
+        case .soda: return Color(red: 0.95, green: 0.45, blue: 0.10)
+        }
+    }
+}
+
+struct PlaylistImportView: View {
+    let platform: MusicPlatform
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var store = PlaylistStore.shared
+    @State private var link = ""
+    @State private var loading = false
+    @State private var message: String?
+    @State private var ok = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                IsleBackground()
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Image(systemName: platform.icon).font(.system(size: 15))
+                            .foregroundStyle(Color.white)
+                            .frame(width: 34, height: 34)
+                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(LinearGradient(colors: [platform.c1, platform.c2],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing)))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("导入 \(platform.title) 歌单").font(.system(size: 14, weight: .bold))
+                            Text("粘贴歌单分享链接或 ID").font(.system(size: 10.5))
+                                .foregroundStyle(IsleColor.textSub)
+                        }
+                        Spacer()
+                    }
+
+                    TextField("https://… 或歌单 ID", text: $link)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .padding(12)
+                        .background(IsleColor.surfaceHi)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .font(.system(size: 12))
+
+                    Button {
+                        Task { await runImport() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            if loading { ProgressView().scaleEffect(0.7) }
+                            Text(loading ? "解析中…" : "开始导入")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(IsleColor.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    }
+                    .disabled(loading)
+
+                    if let message {
+                        HStack(alignment: .top, spacing: 7) {
+                            Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                .font(.system(size: 12))
+                            Text(message).font(.system(size: 11))
+                            Spacer()
+                        }
+                        .foregroundStyle(ok ? IsleColor.mint : IsleColor.gold)
+                        .padding(11)
+                        .background(IsleColor.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+
+                    Text("导入后歌单会出现在「收藏与歌单 → 歌单」，可继续用本 App 播放。")
+                        .font(.system(size: 9.5)).foregroundStyle(Color.white.opacity(0.3))
+                    Spacer()
+                }
+                .padding(16)
+            }
+            .navigationTitle("导入歌单")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } }
+            }
+        }
+    }
+
+    private func runImport() async {
+        let id = Self.extractID(link)
+        guard !id.isEmpty else { message = "链接里没找到歌单 ID"; ok = false; return }
+        loading = true
+        defer { loading = false }
+
+        if let rows = try? await APIClient.shared.importPlaylist(source: platform.rawValue, id: id),
+           !rows.isEmpty {
+            store.lists.append(IslePlaylist(name: "\(platform.title)导入 \(rows.count) 首", songs: rows))
+            ok = true
+            message = "成功导入 \(rows.count) 首"
+            return
+        }
+
+        store.add("\(platform.title)歌单 \(id.suffix(6))")
+        ok = false
+        message = "已创建歌单（\(id)），但服务端未开通解析接口，曲目为空"
+    }
+
+    static func extractID(_ s: String) -> String {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.contains("id=") {
+            return t.components(separatedBy: "id=").last?
+                .components(separatedBy: "&").first ?? ""
+        }
+        if t.contains("playlist/") {
+            return t.components(separatedBy: "playlist/").last?
+                .components(separatedBy: "?").first ?? ""
+        }
+        return t.allSatisfy { $0.isLetter || $0.isNumber } ? t : ""
     }
 }
