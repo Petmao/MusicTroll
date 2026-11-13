@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var musicURL = ""
     @State private var videoURL = ""
     @State private var loadingSources = true
+    @State private var cacheText = "0 MB"
 
     private var isAdmin: Bool { auth.ent.canManageSources }
 
@@ -21,6 +22,7 @@ struct SettingsView: View {
                     if isAdmin { sourcesCard }
                     appearanceCard
                     audioCard
+                    cacheCard
                     infoCard
                     logoutCard
                 }
@@ -31,7 +33,10 @@ struct SettingsView: View {
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
-        .task { if isAdmin { await loadSources() } }
+        .task {
+            refreshCache()
+            if isAdmin { await loadSources() }
+        }
         .alert("退出登录", isPresented: $showLogout) {
             Button("取消", role: .cancel) {}
             Button("退出", role: .destructive) { auth.logout() }
@@ -57,7 +62,8 @@ struct SettingsView: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("屿声音乐").font(.system(size: 17, weight: .heavy)).foregroundStyle(Color.white)
-                    Text("设置 · 音源 · 播放").font(.system(size: 10.5)).foregroundStyle(Color.white.opacity(0.75))
+                    Text("设置 · 音源 · 播放").font(.system(size: 10.5))
+                        .foregroundStyle(Color.white.opacity(0.75))
                 }
                 Spacer()
                 Text(Config.version)
@@ -198,6 +204,51 @@ struct SettingsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
+    private var cacheCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            sectionLabel("播放缓存")
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(IsleColor.pink.opacity(0.16))
+                        .frame(width: 40, height: 40)
+                    IsleIcon(IsleSymbol.download, scale: .md, tint: IsleColor.pinkLight)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("已缓存 \(cacheText)")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("上限 512 MB · 超出后按最久未用清理")
+                        .font(.system(size: 10.5)).foregroundStyle(IsleColor.textSub)
+                }
+
+                Spacer(minLength: 6)
+
+                Button {
+                    PlaybackCache.shared.clear()
+                    refreshCache()
+                } label: {
+                    Text("清理")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 13).padding(.vertical, 7)
+                        .background(IsleColor.accent)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("听到的歌会自动存到本地，下次播放同一首直接读文件，不再走网络。")
+                .font(.system(size: 9.5))
+                .foregroundStyle(IsleColor.textFaint)
+        }
+        .padding(14)
+        .background(IsleColor.surface)
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .stroke(IsleColor.line, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
     private var infoCard: some View {
         VStack(alignment: .leading, spacing: 7) {
             sectionLabel("关于")
@@ -245,6 +296,10 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 4)
+    }
+
+    private func refreshCache() {
+        cacheText = PlaybackCache.shared.prettySize()
     }
 
     private func loadSources() async {
