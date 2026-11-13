@@ -144,7 +144,7 @@ struct PlayerView: View {
     private var controls: some View {
         HStack {
             Button { showLyrics = true } label: {
-                IsleIcon(IsleSymbol.shuffle, scale: .md, tint: Color.white.opacity(0.5))
+                IsleIcon(IsleSymbol.lyric, scale: .md, tint: Color.white.opacity(0.5))
                     .frame(width: 30, height: 30)
             }
             .buttonStyle(.plain)
@@ -236,44 +236,143 @@ struct PlayerView: View {
 struct PlayerLyricSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var engine = MusicEngine.shared
-    private let lines = ["街角的路灯还亮着", "风把从前吹回来", "把耳机调到最大声",
-                         "我坠落在这片星空里", "找不到你来过的痕迹", "如果光也会怕黑"]
-    @State private var current = 3
+    @State private var fontSize: CGFloat = 20
+    @State private var userScrolled = false
+
+    private var currentIndex: Int { engine.currentLyricIndex() }
 
     var body: some View {
         ZStack {
             IsleBackground()
             VStack(spacing: 0) {
-                HStack {
-                    Text(engine.current?.title ?? "歌词").font(.system(size: 13, weight: .bold))
-                    Spacer()
-                    Button("关闭") { dismiss() }.font(.system(size: 12))
+                header
+                if engine.lyrics.isEmpty {
+                    emptyHint
+                } else {
+                    lyricScroll
                 }
-                .padding(.horizontal, 18).padding(.top, 14)
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
-                            Button { current = i } label: {
-                                Text(line)
-                                    .font(.system(size: i == current ? 20 : 15,
-                                                  weight: i == current ? .heavy : .semibold))
-                                    .foregroundStyle(i == current
-                                                     ? IsleColor.pinkLight
-                                                     : Color.white.opacity(0.34))
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.vertical, 44)
-                }
-
-                Text("点任意一行跳到该句")
-                    .font(.system(size: 9.5)).foregroundStyle(Color.white.opacity(0.3))
-                    .padding(.bottom, 18)
+                toolbar
             }
         }
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(engine.current?.title ?? "歌词")
+                    .font(.system(size: 14, weight: .bold)).lineLimit(1)
+                Text(engine.current?.artist ?? "")
+                    .font(.system(size: 10.5)).foregroundStyle(IsleColor.textSub).lineLimit(1)
+            }
+            Spacer()
+            if !engine.lyricState.isEmpty {
+                Text(engine.lyricState)
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(IsleColor.textFaint)
+            }
+            Button { dismiss() } label: {
+                IsleIcon(IsleSymbol.collapse, scale: .md, tint: Color.white.opacity(0.7))
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
+        .padding(.bottom, 6)
+    }
+
+    private var emptyHint: some View {
+        VStack(spacing: 10) {
+            Spacer()
+            IsleIcon(IsleSymbol.lyric, scale: .hero, tint: Color.white.opacity(0.2))
+            Text(engine.lyricState.isEmpty ? "还没有歌词" : engine.lyricState)
+                .font(.system(size: 12)).foregroundStyle(IsleColor.textSub)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var lyricScroll: some View {
+        ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 18) {
+                    ForEach(Array(engine.lyrics.enumerated()), id: \.element.id) { i, line in
+                        lyricLine(i, line)
+                    }
+                }
+                .padding(.vertical, 140)
+            }
+            .onChange(of: currentIndex) { idx in
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    proxy.scrollTo(idx, anchor: .center)
+                }
+            }
+        }
+    }
+
+    private func lyricLine(_ i: Int, _ line: LyricLine) -> some View {
+        let active = i == currentIndex
+        return Button {
+            engine.seek(toSeconds: line.time)
+        } label: {
+            Text(line.text)
+                .font(.system(size: active ? fontSize + 3 : fontSize - 4,
+                              weight: active ? .heavy : .semibold))
+                .foregroundStyle(active ? IsleColor.pinkLight : Color.white.opacity(0.34))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .id(i)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var toolbar: some View {
+        HStack(spacing: 10) {
+            Button {
+                if fontSize > 14 { fontSize -= 2 }
+            } label: {
+                Text("A-").font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.7))
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(IsleColor.surfaceHi).clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                if fontSize < 30 { fontSize += 2 }
+            } label: {
+                Text("A+").font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.7))
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(IsleColor.surfaceHi).clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Text(timeText(engine.currentSeconds()))
+                .font(.system(size: 10.5)).foregroundStyle(IsleColor.textSub)
+
+            Spacer()
+
+            Button {
+                engine.seek(toSeconds: engine.currentSeconds() - 5)
+            } label: {
+                Text("退 5s").font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.7))
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(IsleColor.surfaceHi).clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+    }
+
+    private func timeText(_ s: Double) -> String {
+        guard s.isFinite, s >= 0 else { return "00:00" }
+        let t = Int(s)
+        return String(format: "%02d:%02d", t / 60, t % 60)
     }
 }
 

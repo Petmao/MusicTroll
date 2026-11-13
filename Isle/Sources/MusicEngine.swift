@@ -9,7 +9,7 @@ struct MusicTrack: Equatable {
     var cover: String? = nil
 }
 
-/// 音乐引擎：本地文件走 AudioFX（带 EQ/变速），远程流走 AVPlayer；搜索走后端接口
+/// 音乐引擎：本地文件走 AudioFX（EQ/变速），远程流走 AVPlayer，歌词来自 lrclib.net
 @MainActor
 final class MusicEngine: ObservableObject {
     static let shared = MusicEngine()
@@ -19,11 +19,14 @@ final class MusicEngine: ObservableObject {
     @Published var progress: Double = 0
     @Published var duration: Double = 0
     @Published var status: String = "就绪"
+    @Published var lyrics: [LyricLine] = []
+    @Published var lyricState: String = ""
 
     private var player: AVPlayer?
     private var ticker: Timer?
     private var itemObs: NSKeyValueObservation?
     private var usingFX = false
+    private var lyricCache: [String: [LyricLine]] = [:]
     private let apiBase = "https://api.irepo.cn/api/wxmusic"
 
     enum EngineError: Error, LocalizedError {
@@ -136,7 +139,13 @@ final class MusicEngine: ObservableObject {
         let cached = PlaybackCache.shared.cachedURL(for: playURL)
         let cover = item["cover"] as? String
 
-        // 本地文件优先：走 AudioFX，可加 EQ 与变速
+        // 歌词异步拉取，不阻塞播放
+        lyrics = []
+        lyricState = "正在找歌词…"
+        Task { [weak self] in
+            await self?.loadLyrics(title: title, artist: artist)
+        }
+
         if let local = cached, AudioFX.shared.load(local) {
             usingFX = true
             player?.pause()
@@ -191,6 +200,50 @@ final class MusicEngine: ObservableObject {
             PlaybackCache.shared.download(playURL)
         }
     }
+
+    // MARK: - 歌词
+
+    func loadLyrics(title: String, artist: String) async {
+        let key = title + "|" + artist
+        if let hit = lyricCache[key], !hit.isEmpty {
+            lyrics = hit
+            lyricState = ""
+            return
+        }
+
+        let lines = await LyricService.fetch(title: title, artist: artist)
+        guard current?.title == title else { return }
+
+        lyrics = lines
+        if lines.isEmpty {
+            lyricState = "没找到这首歌的歌词"
+        } else {
+            lyricState = "歌词来自 lrclib"
+            lyricCache[key] = lines
+        }
+    }
+
+    func currentLyricIndex() -> Int {
+        let t = currentSeconds()
+        return LyricParser.currentIndex(lyrics, at: t)
+    }
+
+    func currentSeconds() -> Double {
+        if usingFX { return AudioFX.shared.currentTime }
+        return player?.currentTime().seconds ?? 0
+    }
+
+    func seek(toSeconds seconds: Double) {
+        if usingFX {
+            AudioFX.shared.seek(to: seconds)
+            if duration > 0 { progress = min(1, max(0, seconds / duration)) }
+            return
+        }
+        player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
+        if duration > 0 { progress = min(1, max(0, seconds / duration)) }
+    }
+
+    // MARK: - 传输
 
     func toggle() {
         if usingFX {
