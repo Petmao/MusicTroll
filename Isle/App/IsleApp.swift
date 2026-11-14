@@ -5,7 +5,8 @@ struct IsleApp: App {
     @StateObject private var auth = AuthStore()
 
     init() {
-        // 必须最先执行：补上 OpenGLES / CoreImage，否则键盘渲染会跳空指针
+        // 只做 dlopen，纯 C 调用，App.init 阶段安全。
+        // 图形相关的预热在下面 .task 里做，App.init 阶段碰 Metal 会崩在启动。
         LinkFix.load()
     }
 
@@ -16,7 +17,10 @@ struct IsleApp: App {
             }
             .environmentObject(auth)
             .preferredColorScheme(.dark)
-            .task { await auth.bootstrap() }
+            .task {
+                LinkFix.warmUp()
+                await auth.bootstrap()
+            }
         }
     }
 }
