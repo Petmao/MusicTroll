@@ -319,20 +319,43 @@ function pick(obj, path) {
 
 // 地址里没写参数名时，逐个试常见关键词参数，哪个能出数据就用哪个
 async function guessKwParam(rawUrl) {
-  const candidates = ['kw', 'keyword', 'keywords', 'w', 'word', 's', 'q', 'query', 'name', 'search', 'text', 'id'];
-  for (const cand of candidates) {
+  const getKeys = ['kw', 'keyword', 'keywords', 'w', 'word', 's', 'q', 'query', 'name', 'search', 'text', 'id'];
+
+  // 一、GET + query 参数
+  for (const cand of getKeys) {
     let u;
     try { u = new URL(rawUrl); } catch (_) { return null; }
     u.searchParams.set(cand, '夜航星');
-    const r = await fetchJson(u.toString(), { timeout: 8000 });
+    const r = await fetchJson(u.toString(), { timeout: 6000 });
     if (!r.ok || !r.json) continue;
     const out = [];
     deepCollect(r.json, out, 0);
     if (out.length) {
-      console.log('guess param: ' + cand);
+      console.log('guess GET: ' + cand);
       return cand;
     }
   }
+
+  // 二、POST + JSON body
+  const postKeys = ['keyword', 'kw', 'name', 's', 'q', 'word', 'search'];
+  for (const cand of postKeys) {
+    const body = {};
+    body[cand] = '夜航星';
+    const r = await fetchJson(String(rawUrl), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      timeout: 6000
+    });
+    if (!r.ok || !r.json) continue;
+    const out = [];
+    deepCollect(r.json, out, 0);
+    if (out.length) {
+      console.log('guess POST: ' + cand);
+      return 'POST:' + cand;
+    }
+  }
+
   return null;
 }
 
@@ -450,10 +473,29 @@ app.get('/api/search', limit('search', 60, 60000), async (req, res) => {
   if (!rows.length) return res.json({ keyword: kw, count: 0, sources: [], rows: [] });
 
   const tasks = rows.map(async (src) => {
-    let target;
-    try { target = buildSourceUrl(src, kw); } catch (_) { return { name: src.name, status: 0, ms: 0, items: [] }; }
     const h = src.headers ? safeJson(src.headers) : {};
-    const r = await fetchJson(target, { headers: h || {}, timeout: 15000 });
+    const isPost = String(src.method || 'GET').toUpperCase() === 'POST';
+
+    let r;
+    if (isPost) {
+      const bodyObj = {};
+      const p = src.params ? safeJson(src.params) : null;
+      if (p) {
+        for (const k of Object.keys(p)) bodyObj[k] = String(p[k]).split('{kw}').join(kw);
+      } else {
+        bodyObj.keyword = kw;
+      }
+      r = await fetchJson(String(src.url), {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, h || {}),
+        body: JSON.stringify(bodyObj),
+        timeout: 15000
+      });
+    } else {
+      let target;
+      try { target = buildSourceUrl(src, kw); } catch (_) { return { name: src.name, status: 0, ms: 0, items: [] }; }
+      r = await fetchJson(target, { headers: h || {}, timeout: 15000 });
+    }
     const out = [];
     if (r.json) deepCollect(r.json, out, 0);
     db.prepare('UPDATE sources SET last_status=?, last_ms=?, checked_at=? WHERE id=?')
@@ -517,10 +559,22 @@ app.get('/api/videos', auth, limit('videos', 60, 60000), async (req, res) => {
   const report = [];
 
   for (const src of rows) {
-    let target;
-    try { target = buildSourceUrl(src, String(req.query.kw || '')); } catch (_) { continue; }
     const h = src.headers ? safeJson(src.headers) : {};
-    const r = await fetchJson(target, { headers: h || {}, timeout: 15000 });
+    const isPost = String(src.method || 'GET').toUpperCase() === 'POST';
+
+    let r;
+    if (isPost) {
+      r = await fetchJson(String(src.url), {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, h || {}),
+        body: JSON.stringify({ keyword: String(req.query.kw || '') }),
+        timeout: 15000
+      });
+    } else {
+      let target;
+      try { target = buildSourceUrl(src, String(req.query.kw || '')); } catch (_) { continue; }
+      r = await fetchJson(target, { headers: h || {}, timeout: 15000 });
+    }
     const items = [];
     if (r.json) collectMedia(r.json, items, 0);
     db.prepare('UPDATE sources SET last_status=?, last_ms=?, checked_at=? WHERE id=?')
@@ -698,7 +752,7 @@ app.get('/api/admin/sources', adminAuth, (req, res) => {
 });
 
 app.post('/api/admin/sources', adminAuth, async (req, res) => {
-  const { kind, name, url, method, headers, params, resultPath, note, enabled, sort } = req.body || {};
+  let { kind, name, url, method, headers, params, resultPath, note, enabled, sort } = req.body || {};
   if (!['music', 'video'].includes(kind)) return res.status(400).json({ error: 'bad_kind' });
   if (!name || !url) return res.status(400).json({ error: 'bad_source' });
 
@@ -707,7 +761,12 @@ app.post('/api/admin/sources', adminAuth, async (req, res) => {
   let guessed = null;
   if (kind === 'music' && !String(url).includes('{kw}') && !finalParams) {
     guessed = await guessKwParam(String(url));
-    if (guessed) finalParams = { [guessed]: '{kw}' };
+    if (guessed && guessed.startsWith('POST:')) {
+      method = 'POST';
+      finalParams = { [guessed.slice(5)]: '{kw}' };
+    } else if (guessed) {
+      finalParams = { [guessed]: '{kw}' };
+    }
   }
 
   const ins = db.prepare(`INSERT INTO sources

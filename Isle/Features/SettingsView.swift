@@ -86,27 +86,14 @@ struct SettingsView: View {
 
     private var sourcesCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
-                sectionLabel("源地址")
-                Text("仅管理员可见")
-                    .font(.system(size: 9))
-                    .foregroundStyle(IsleColor.gold.opacity(0.8))
-                    .padding(.horizontal, 5).padding(.vertical, 2)
-                    .background(Capsule().fill(IsleColor.gold.opacity(0.15)))
-            }
-            .padding(.bottom, 6)
+            sectionLabel("账号与设备")
+                .padding(.bottom, 6)
 
-            NavigationLink(destination: MusicSourceSettingsView()) {
-                navRow("音乐音源", musicURL.isEmpty ? (loadingSources ? "读取中…" : "未配置，点此添加") : musicURL)
-            }
-            Divider().background(Color.white.opacity(0.06))
-            NavigationLink(destination: VideoSourceSettingsView()) {
-                navRow("视频源", videoURL.isEmpty ? (loadingSources ? "读取中…" : "未配置，点此添加") : videoURL)
-            }
-            Divider().background(Color.white.opacity(0.06))
             NavigationLink(destination: DeviceView()) {
                 navRow("设备管理", "查看已绑定设备 / 解绑")
             }
+            Divider().background(Color.white.opacity(0.06))
+            navRow("音乐与视频源", "由后台 admin.html 统一配置")
         }
         .padding(14)
         .background(IsleColor.surface)

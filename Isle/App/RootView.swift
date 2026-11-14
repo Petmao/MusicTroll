@@ -26,7 +26,10 @@ struct RootView: View {
             IsleBackground()
             VStack(spacing: 0) {
                 content
-                MiniPlayerBar()
+                if tab != 2 {
+                    MiniPlayerBar()
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
                 TabBarView(tab: $tab)
             }
         }

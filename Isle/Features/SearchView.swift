@@ -10,6 +10,9 @@ struct SearchView: View {
     @State private var tab = 0
     @State private var addTarget = ""
     @State private var showAdd = false
+    @State private var actionIdx = 0
+    @State private var actionTitle = ""
+    @State private var showActions = false
 
     private let tabs = ["综合", "单曲", "歌单", "歌手", "专辑"]
     private let covers: [Color] = [
@@ -42,6 +45,20 @@ struct SearchView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showAdd) {
             AddToPlaylistSheet(title: addTarget)
+        }
+        .confirmationDialog(actionTitle, isPresented: $showActions, titleVisibility: .visible) {
+            Button("立即播放") {
+                Task { await playAt(actionIdx) }
+            }
+            Button("加入歌单") {
+                addTarget = actionTitle
+                showAdd = true
+            }
+            Button("加入我喜欢的音乐") {
+                let id = PlaylistStore.shared.favoritePlaylistID()
+                PlaylistStore.shared.addSong(actionTitle, to: id)
+            }
+            Button("取消", role: .cancel) {}
         }
     }
 
@@ -186,7 +203,11 @@ struct SearchView: View {
         let c1 = covers[idx % covers.count]
         let c2 = covers[(idx + 1) % covers.count]
 
-        return Button { Task { await playAt(idx) } } label: {
+        return Button {
+            actionIdx = idx
+            actionTitle = title
+            showActions = true
+        } label: {
             HStack(spacing: 12) {
                 coverBlock(c1: c1, c2: c2)
 

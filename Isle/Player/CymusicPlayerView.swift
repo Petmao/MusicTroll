@@ -403,31 +403,47 @@ struct CymusicPlayerView: View {
 
     private var transportBlock: some View {
         HStack(spacing: 0) {
-            Button(action: skipPrevious) {
+            Button {
+                tapLight()
+                skipPrevious()
+            } label: {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 28))
                     .foregroundStyle(Color.white)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 46, height: 46)
+                    .contentShape(Rectangle())
             }
             .frame(maxWidth: .infinity)
 
-            Button { engine.toggle() } label: {
+            Button {
+                tapLight()
+                engine.toggle()
+            } label: {
                 Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 44))
                     .foregroundStyle(Color.white)
-                    .frame(width: 48, height: 48)
+                    .frame(width: 58, height: 58)
+                    .contentShape(Rectangle())
             }
             .frame(maxWidth: .infinity)
 
-            Button(action: skipNext) {
+            Button {
+                tapLight()
+                skipNext()
+            } label: {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 28))
                     .foregroundStyle(Color.white)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 46, height: 46)
+                    .contentShape(Rectangle())
             }
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TransportButtonStyle())
+    }
+
+    private func tapLight() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private var volumeBlock: some View {
@@ -739,5 +755,16 @@ struct PlaylistSheet: View {
             .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+}
+
+
+/// 按下时缩小 + 变淡，给「按到了」的即时反馈
+struct TransportButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.84 : 1)
+            .opacity(configuration.isPressed ? 0.55 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
