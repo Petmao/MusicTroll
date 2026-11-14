@@ -90,7 +90,8 @@ final class CymusicPalette: ObservableObject {
         guard let out = filter.outputImage else { return .fallback }
 
         var px = [UInt8](repeating: 0, count: 4)
-        let ctx = CIContext(options: [.workingColorSpace: NSNull()])
+        let ctx = CIContext(options: [.workingColorSpace: NSNull(),
+                                      .useSoftwareRenderer: true])
         ctx.render(out,
                    toBitmap: &px,
                    rowBytes: 4,

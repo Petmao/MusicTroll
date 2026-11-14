@@ -3,7 +3,7 @@
 set -euo pipefail
 
 MODE="${1:-ipa}"
-VERSION="${VERSION:-1.6.0}"
+VERSION="${VERSION:-1.12.0}"
 NAME=Isle
 DISPLAY="屿声音乐"
 BID=com.isle.music
@@ -130,7 +130,8 @@ xcrun -sdk iphoneos swiftc \
   $FILES -o "$APP/$NAME" \
   -framework UIKit -framework SwiftUI -framework AVFoundation -framework CoreMedia \
   -framework MediaPlayer -framework CryptoKit -framework Security -framework JavaScriptCore \
-  -framework CoreImage -framework OpenGLES -framework QuartzCore \
+  -framework CoreImage -framework Metal -framework MetalKit \
+  -framework CoreVideo -framework OpenGLES -framework QuartzCore \
   -framework CoreGraphics -framework CoreText -framework Foundation
 chmod +x "$APP/$NAME"
 
