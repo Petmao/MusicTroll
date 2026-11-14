@@ -1,12 +1,18 @@
 import SwiftUI
+import UIKit
 import AVFoundation
 import MediaPlayer
 
-@MainActor
 final class PlayerPresenter: ObservableObject {
     static let shared = PlayerPresenter()
     @Published var show = false
-    func present() { show = true }
+    func present() {
+        if Thread.isMainThread {
+            show = true
+        } else {
+            DispatchQueue.main.async { self.show = true }
+        }
+    }
 }
 
 final class SystemVolume: ObservableObject {
@@ -321,9 +327,19 @@ struct CymusicPlayerView: View {
             } label: { Label("喜欢 / 取消喜欢", systemImage: "heart") }
             Button { toggleLyrics() } label: { Label("歌词", systemImage: "text.quote") }
             Button { showQueue = true } label: { Label("播放列表", systemImage: "list.bullet") }
-            if let t = engine.current?.title {
-                ShareLink(item: "\(t) - \(artist)") {
-                    Label("分享", systemImage: "square.and.arrow.up")
+            if #available(iOS 16.0, *) {
+                if let t = engine.current?.title {
+                    ShareLink(item: "\(t) - \(artist)") {
+                        Label("分享", systemImage: "square.and.arrow.up")
+                    }
+                }
+            } else {
+                Button {
+                    if let t = engine.current?.title {
+                        UIPasteboard.general.string = "\(t) - \(artist)"
+                    }
+                } label: {
+                    Label("复制歌曲信息", systemImage: "doc.on.doc")
                 }
             }
         } label: {
@@ -344,12 +360,11 @@ struct CymusicPlayerView: View {
                 onCommit: { r in engine.seek(to: r); scrubbing = false }
             )
             HStack(alignment: .firstTextBaseline) {
-                Text(timeText(liveSeconds))
+                Text(timeText(liveSeconds)).kerning(0.7)
                 Spacer(minLength: 0)
-                Text("- " + timeText(max(0, engine.duration - liveSeconds)))
+                Text("- " + timeText(max(0, engine.duration - liveSeconds))).kerning(0.7)
             }
             .font(.system(size: 12, weight: .medium))
-            .tracking(0.7)
             .foregroundStyle(Color.white.opacity(0.75))
             .padding(.top, 20)
         }
