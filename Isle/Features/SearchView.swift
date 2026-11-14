@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SearchView: View {
     @StateObject private var engine = MusicEngine.shared
+    @ObservedObject private var history = SearchHistory.shared
     @State private var keyword = ""
     @State private var results: [[String: Any]] = []
     @State private var searching = false
@@ -27,7 +28,12 @@ struct SearchView: View {
                 tabRow
                 tipLine
                 searchingLine
-                resultsList
+
+                if results.isEmpty && !searching && !history.items.isEmpty {
+                    historySection
+                } else {
+                    resultsList
+                }
             }
         }
         .navigationTitle("搜索全网")
@@ -106,6 +112,56 @@ struct SearchView: View {
         }
     }
 
+    private var historySection: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("搜索历史")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                    Spacer()
+                    Button { history.clear() } label: {
+                        Text("清空")
+                            .font(.system(size: 11))
+                            .foregroundStyle(IsleColor.pinkLight)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)],
+                          alignment: .leading,
+                          spacing: 8) {
+                    ForEach(history.items, id: \.self) { h in
+                        Button {
+                            keyword = h
+                            Task { await run() }
+                        } label: {
+                            Text(h)
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Color.white.opacity(0.78))
+                                .lineLimit(1)
+                                .padding(.horizontal, 12)
+                                .frame(height: 30)
+                                .frame(maxWidth: .infinity)
+                                .background(IsleColor.surface)
+                                .overlay(Capsule().stroke(IsleColor.line, lineWidth: 1))
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 2)
+
+                Text("点历史里的词直接重搜，跑过的关键词会自动留在这里")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.white.opacity(0.28))
+                    .padding(.top, 4)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 16)
+        }
+    }
+
     private var resultsList: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 8) {
@@ -125,7 +181,7 @@ struct SearchView: View {
         let c1 = covers[idx % covers.count]
         let c2 = covers[(idx + 1) % covers.count]
 
-        return Button { Task { await engine.play(keyword: title) } } label: {
+        return Button { Task { await playAt(idx) } } label: {
             HStack(spacing: 12) {
                 coverBlock(c1: c1, c2: c2)
 
@@ -173,6 +229,12 @@ struct SearchView: View {
             )
     }
 
+    private func playAt(_ idx: Int) async {
+        let titles = results.compactMap { $0["title"] as? String }
+        guard !titles.isEmpty else { return }
+        await engine.playQueue(titles, startAt: min(idx, titles.count - 1))
+    }
+
     private func run() async {
         let k = keyword.trimmingCharacters(in: .whitespaces)
         guard !k.isEmpty else { return }
@@ -180,6 +242,7 @@ struct SearchView: View {
         tip = nil
         do {
             results = try await engine.search(k)
+            SearchHistory.shared.add(k)
             if results.isEmpty { tip = "没有搜到结果，换个关键词或检查后台音源" }
         } catch let e as LocalizedError {
             tip = e.errorDescription

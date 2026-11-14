@@ -1,0 +1,37 @@
+name: isle-fix3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch engine (queue / repeat / auto-next)
+        run: python3 scripts/isle_patch2.py
+
+      - name: Patch UI (mini player / repeat button / shuffle)
+        run: python3 scripts/isle_patch3.py
+
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add -A
+          git commit -m 'feat(playback): 队列 + 顺序/循环/单曲/随机、播完自动下一首、迷你播放条可重新拉起、搜索历史'
+          git push origin HEAD:'猫巷。'
+
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'
