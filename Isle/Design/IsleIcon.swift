@@ -2,7 +2,7 @@ import SwiftUI
 
 struct IsleIcon: View {
     enum Scale: Double {
-        case xs = 11, sm = 13, md = 16, lg = 20, xl = 26, hero = 34
+        case xs = 10, sm = 11.5, md = 13, lg = 16, xl = 20, hero = 26
     }
 
     let symbol: String
@@ -11,7 +11,11 @@ struct IsleIcon: View {
     var tint: Color?
     var box: CGFloat?
 
-    init(_ symbol: String, scale: Scale = .md, weight: Font.Weight = .semibold, tint: Color? = nil, box: CGFloat? = nil) {
+    init(_ symbol: String,
+         scale: Scale = .md,
+         weight: Font.Weight = .medium,
+         tint: Color? = nil,
+         box: CGFloat? = nil) {
         self.symbol = symbol
         self.scale = scale
         self.weight = weight
