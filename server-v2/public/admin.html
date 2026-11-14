@@ -188,7 +188,13 @@ function addSrc(kind) {
 
 function testSrc(id) {
   api('/api/admin/sources/' + id + '/test', { method: 'POST' })
-    .then(function (r) { alert('状态 ' + r.status + ' · ' + r.ms + 'ms'); go(document.querySelector('aside a.on').dataset.v); })
+    .then(function (r) {
+      var msg = '状态 ' + r.status + ' · ' + r.ms + 'ms';
+      if (r.url) msg += '\n' + r.url;
+      if (r.snippet) msg += '\n\n' + r.snippet;
+      alert(msg);
+      go(document.querySelector('aside a.on').dataset.v);
+    })
     .catch(function (e) { alert(e.message); });
 }
 

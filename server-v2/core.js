@@ -254,12 +254,22 @@ function newCode(prefix) {
   return (prefix || C.codePrefix) + '-' + uid(6);
 }
 
+const DEFAULT_FETCH_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+};
+
 async function fetchJson(url, opt) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), (opt && opt.timeout) || 12000);
   const started = Date.now();
   try {
-    const res = await fetch(url, Object.assign({}, opt, { signal: ctl.signal }));
+    const merged = Object.assign({}, opt, {
+      signal: ctl.signal,
+      headers: Object.assign({}, DEFAULT_FETCH_HEADERS, (opt && opt.headers) || {})
+    });
+    const res = await fetch(url, merged);
     const text = await res.text();
     let json = null;
     try { json = JSON.parse(text); } catch (_) {}

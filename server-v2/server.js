@@ -312,14 +312,32 @@ function pick(obj, path) {
 }
 
 async function probeSource(src) {
-  const url = new URL(src.url);
-  const p = src.params ? safeJson(src.params) : null;
-  if (p) Object.keys(p).forEach(k => url.searchParams.set(k, p[k]));
+  // 关键：测试也要走 buildSourceUrl，否则地址里的 {kw} 会原样发给上游，
+  // 上游收到 %7Bkw%7D 基本都回 403 / 400。
+  let target;
+  try {
+    target = buildSourceUrl(src, '测试');
+  } catch (_) {
+    target = String(src.url);
+  }
+
   const h = src.headers ? safeJson(src.headers) : {};
-  const r = await fetchJson(url.toString(), { method: src.method || 'GET', headers: h || {}, timeout: 12000 });
+  const r = await fetchJson(target, {
+    method: src.method || 'GET',
+    headers: h || {},
+    timeout: 12000
+  });
+
   db.prepare('UPDATE sources SET last_status=?, last_ms=?, checked_at=? WHERE id=?')
     .run(r.status, r.ms, now(), src.id);
-  return { status: r.status, ms: r.ms, ok: r.ok };
+
+  return {
+    status: r.status,
+    ms: r.ms,
+    ok: r.ok,
+    url: target,
+    snippet: String(r.text || '').slice(0, 240)
+  };
 }
 
 app.get('/api/sources', auth, (req, res) => {
