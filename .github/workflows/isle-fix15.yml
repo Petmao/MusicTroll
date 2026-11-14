@@ -1,0 +1,41 @@
+name: isle-fix15
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch server POST support
+        run: python3 scripts/isle_patch18.py
+      - name: Patch client UX
+        run: python3 scripts/isle_patch19.py
+      - name: Verify
+        run: |
+          grep -c TransportButtonStyle Isle/Player/CymusicPlayerView.swift
+          grep -c confirmationDialog Isle/Features/SearchView.swift
+          grep -c netease Isle/Sources/LyricService.swift
+          grep -c 'tab != 2' Isle/App/RootView.swift
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add -A
+          git diff --cached --stat
+          git commit -m 'feat: 传输键按压反馈、搜索点击弹选择、歌词网易云兜底、养眼页隐藏迷你条、设置去掉源入口；服务端支持 POST 源'
+          git push origin HEAD:'猫巷。'
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'
+      - name: Trigger pack-server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pack-server.yml --ref '猫巷。'
