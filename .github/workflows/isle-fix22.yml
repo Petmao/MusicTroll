@@ -1,0 +1,36 @@
+name: isle-fix22
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch vip gate
+        run: python3 scripts/isle_patch30.py
+      - name: Patch search fallback
+        run: python3 scripts/isle_patch31.py
+      - name: Verify
+        run: |
+          grep -c 'var gate' Isle/Sources/MusicEngine.swift
+          grep -c 'MusicEngine.shared.gate' Isle/Network/AuthStore.swift
+          grep -c 'components(separatedBy: " - ")' Isle/Sources/MusicEngine.swift
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add -A
+          git diff --cached --stat
+          git commit -m 'fix: 非 VIP 不再出声（引擎层门禁 + 降级即停）；歌单“歌名 - 歌手”搜不到时退化成只搜歌名'
+          git push origin HEAD:'猫巷。'
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'

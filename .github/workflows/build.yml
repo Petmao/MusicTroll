@@ -16,7 +16,7 @@ jobs:
       - name: Install ldid
         run: brew install ldid || true
       - name: Build unsigned ipa + tipa
-        run: VERSION=1.13.1 bash build.sh both
+        run: VERSION=1.13.2 bash build.sh both
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
@@ -32,11 +32,12 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.13.1
-          name: 屿声音乐 v1.13.1（点歌秒开播放器）
+          tag_name: v1.13.2
+          name: 屿声音乐 v1.13.2（VIP 门禁下移到引擎）
           body: |
-            - 点任何歌曲立刻弹出播放器，封面位显示加载进度，URL 后台加载完自动开始播
-            - 播放器标题在音频未就绪时用队列里的歌名占位
-            - 服务端新增 /api/import/probe，一眼看出歌单导入卡在哪一步
-            - 版本号 1.13.1
+            - 非 VIP 时 MusicEngine 直接拦截，不再取地址、不再出声
+            - 会员到期或降级时立即停播并复位进度
+            - 歌单里 “歌名 - 歌手” 整串搜不到时，自动退化成只搜歌名
+            - 歌单详情每行加播放图标与触感反馈
+            - 版本号 1.13.2
           files: Isle.tipa
