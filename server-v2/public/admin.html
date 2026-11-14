@@ -146,7 +146,9 @@ function showErr(e) { document.getElementById('view').innerHTML = '<div class="c
 function sources(kind) {
   api('/api/admin/sources').then(function (r) {
     SRC = r.rows.filter(function (x) { return x.kind === kind; });
-    var h = '<h3>' + (kind === 'music' ? '音乐源' : '视频源') + ' <span>按 sort 升序并发请求，先到先出</span></h3>';
+    var h = '<h3>' + (kind === 'music' ? '音乐源' : '视频源') + ' <span>只填名称和地址，参数名服务端自己试</span></h3>';
+    h += '<div style="margin-bottom:12px"><button onclick="seedSources()">一键导入内置源</button> <span class="hint" style="display:inline">Meting 三家 + 屿声上游 + 内置演示视频，已存在自动跳过</span></div>';
+    h += '<div id="seedOut"></div>';
     h += '<div class="card"><div class="row">';
     h += '<div><label>名称</label><input id="s_name" placeholder="网易云直连"></div>';
     h += '<div><label>地址（含 {kw} 占位）</label><input id="s_url" placeholder="https://api.example.com/search?keyword={kw}"></div>';
@@ -182,7 +184,20 @@ function addSrc(kind) {
     headers: document.getElementById('s_headers').value ? JSON.parse(document.getElementById('s_headers').value) : null
   };
   api('/api/admin/sources', { method: 'POST', body: body })
-    .then(function () { sources(kind); })
+    .then(function (r) {
+      if (r.guessedParam) alert('自动识别出关键词参数：' + r.guessedParam);
+      sources(kind);
+    })
+    .catch(function (e) { alert(e.message); });
+}
+
+function seedSources() {
+  api('/api/admin/sources/seed', { method: 'POST' })
+    .then(function (r) {
+      document.getElementById('seedOut').innerHTML = '<div class="card"><span class="tag ok">新增 ' + r.added + ' 条</span>' +
+        (r.skipped && r.skipped.length ? ' <span class="hint" style="display:inline">已存在：' + esc(r.skipped.join('、')) + '</span>' : '') + '</div>';
+      setTimeout(function () { go(document.querySelector('aside a.on').dataset.v); }, 1200);
+    })
     .catch(function (e) { alert(e.message); });
 }
 

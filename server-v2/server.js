@@ -317,6 +317,25 @@ function pick(obj, path) {
   return path.split('.').reduce((o, k) => (o && o[k] !== undefined ? o[k] : undefined), obj);
 }
 
+// 地址里没写参数名时，逐个试常见关键词参数，哪个能出数据就用哪个
+async function guessKwParam(rawUrl) {
+  const candidates = ['kw', 'keyword', 'keywords', 'w', 'word', 's', 'q', 'query', 'name', 'search', 'text', 'id'];
+  for (const cand of candidates) {
+    let u;
+    try { u = new URL(rawUrl); } catch (_) { return null; }
+    u.searchParams.set(cand, '夜航星');
+    const r = await fetchJson(u.toString(), { timeout: 8000 });
+    if (!r.ok || !r.json) continue;
+    const out = [];
+    deepCollect(r.json, out, 0);
+    if (out.length) {
+      console.log('guess param: ' + cand);
+      return cand;
+    }
+  }
+  return null;
+}
+
 async function probeSource(src) {
   // 关键：测试也要走 buildSourceUrl，否则地址里的 {kw} 会原样发给上游，
   // 上游收到 %7Bkw%7D 基本都回 403 / 400。
@@ -646,6 +665,33 @@ app.get('/api/admin/orders', adminAuth, (req, res) => {
   res.json({ rows });
 });
 
+app.post('/api/admin/sources/seed', adminAuth, async (req, res) => {
+  const self = 'http://127.0.0.1:' + C.port;
+  const seed = [
+    { kind: 'music', name: 'Meting 网易云', url: 'https://api.i-meto.com/meting/api?server=netease&type=search&id={kw}', sort: 0 },
+    { kind: 'music', name: 'Meting QQ', url: 'https://api.i-meto.com/meting/api?server=tencent&type=search&id={kw}', sort: 1 },
+    { kind: 'music', name: 'Meting 酷狗', url: 'https://api.i-meto.com/meting/api?server=kugou&type=search&id={kw}', sort: 2 },
+    { kind: 'music', name: '屿声上游', url: 'https://api.irepo.cn/api/wxmusic?source=third&keyword={kw}', sort: 3 },
+    { kind: 'video', name: '内置演示片', url: self + '/feed.json', sort: 0 }
+  ];
+
+  const ins = db.prepare('INSERT INTO sources (kind,name,url,method,enabled,sort,created_at) VALUES (?,?,?,?,1,?,?)');
+  let added = 0;
+  const skipped = [];
+
+  for (const it of seed) {
+    if (db.prepare('SELECT 1 FROM sources WHERE url=?').get(it.url)) {
+      skipped.push(it.name);
+      continue;
+    }
+    ins.run(it.kind, it.name, it.url, 'GET', it.sort, now());
+    added++;
+  }
+
+  audit(null, 'admin_seed_sources', 'added ' + added, req.ip);
+  res.json({ added, skipped });
+});
+
 app.get('/api/admin/sources', adminAuth, (req, res) => {
   const rows = db.prepare('SELECT * FROM sources ORDER BY kind ASC, sort ASC, id ASC').all();
   res.json({ rows: rows.map(normalizeSource) });
@@ -655,19 +701,32 @@ app.post('/api/admin/sources', adminAuth, async (req, res) => {
   const { kind, name, url, method, headers, params, resultPath, note, enabled, sort } = req.body || {};
   if (!['music', 'video'].includes(kind)) return res.status(400).json({ error: 'bad_kind' });
   if (!name || !url) return res.status(400).json({ error: 'bad_source' });
+
+  // 音乐源：地址里没写 {kw}、也没配 params 时，自动试出关键词参数名
+  let finalParams = params || null;
+  let guessed = null;
+  if (kind === 'music' && !String(url).includes('{kw}') && !finalParams) {
+    guessed = await guessKwParam(String(url));
+    if (guessed) finalParams = { [guessed]: '{kw}' };
+  }
+
   const ins = db.prepare(`INSERT INTO sources
     (kind,name,url,method,headers,params,result_path,note,enabled,sort,created_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(
     kind, String(name), String(url), String(method || 'GET'),
     headers ? JSON.stringify(headers) : null,
-    params ? JSON.stringify(params) : null,
+    finalParams ? JSON.stringify(finalParams) : null,
     resultPath || null, note || '', enabled === false ? 0 : 1,
     Number.isFinite(sort) ? sort : 0, now()
   );
   const row = db.prepare('SELECT * FROM sources WHERE id=?').get(ins.lastInsertRowid);
   const p = await probeSource(row);
   audit(null, 'admin_add_source', kind + '/' + name + '/' + p.status, req.ip);
-  res.json({ row: normalizeSource(db.prepare('SELECT * FROM sources WHERE id=?').get(row.id)), probe: p });
+  res.json({
+    row: normalizeSource(db.prepare('SELECT * FROM sources WHERE id=?').get(row.id)),
+    probe: p,
+    guessedParam: guessed
+  });
 });
 
 app.patch('/api/admin/sources/:id', adminAuth, async (req, res) => {
