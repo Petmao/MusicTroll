@@ -24,7 +24,6 @@ def sub(s, old, new, label):
     return s.replace(old, new, 1)
 
 
-# ---------------- AudioFX: 主音量 ----------------
 p = 'Isle/Sources/AudioFX.swift'
 s = load(p)
 
@@ -39,7 +38,6 @@ s = sub(s, """    var playbackRate: Float {""",
 save(p, s)
 print('AudioFX done')
 
-# ---------------- MusicEngine ----------------
 p = 'Isle/Sources/MusicEngine.swift'
 s = load(p)
 
@@ -52,8 +50,8 @@ s = sub(s, """    func play(keyword: String) async {
     }""",
     """    func play(keyword: String) async {
         var titles = [keyword]
-        for s in DemoData.hot where !titles.contains(s.title) {
-            titles.append(s.title)
+        for item in DemoData.hot where !titles.contains(item.title) {
+            titles.append(item.title)
         }
         await playQueue(titles, startAt: 0, present: true)
     }""", 'engine 单曲补队列')
@@ -81,37 +79,26 @@ s = sub(s, """    func seek(toSeconds seconds: Double) {
         if wasPlaying { p.play(); isPlaying = true }
     }""", 'engine seek 秒保持播放')
 
-s = sub(s, """    func seek(to ratio: Double) {
-        if usingFX {
-            let d = AudioFX.shared.duration
-            guard d > 0 else { return }
-            let target = min(1, max(0, ratio))
-            AudioFX.shared.seek(to: d * target)
-            progress = target
-            return
-        }
-
-        guard let p = player, let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 else { return }
+s = sub(s, """        guard let p = player, let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 else { return }
         p.seek(to: CMTime(seconds: d * ratio, preferredTimescale: 600))
         progress = ratio
     }""",
-    """    func seek(to ratio: Double) {
-        if usingFX {
-            let d = AudioFX.shared.duration
-            guard d > 0 else { return }
-            let target = min(1, max(0, ratio))
-            AudioFX.shared.seek(to: d * target)
-            progress = target
-            if isPlaying { AudioFX.shared.play() }
-            return
-        }
-
-        guard let p = player, let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 else { return }
+    """        guard let p = player, let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 else { return }
         let wasPlaying = isPlaying
         p.seek(to: CMTime(seconds: d * ratio, preferredTimescale: 600))
         progress = ratio
         if wasPlaying { p.play(); isPlaying = true }
     }""", 'engine seek 比例保持播放')
+
+s = sub(s, """            let target = min(1, max(0, ratio))
+            AudioFX.shared.seek(to: d * target)
+            progress = target
+            return""",
+    """            let target = min(1, max(0, ratio))
+            AudioFX.shared.seek(to: d * target)
+            progress = target
+            if isPlaying { AudioFX.shared.play() }
+            return""", 'engine 本地 seek 保持播放')
 
 s = sub(s, """                self.isPlaying = (p.timeControlStatus == .playing)""",
     """                self.isPlaying = (p.rate > 0 || p.timeControlStatus == .waitingToPlayAtSpecifiedRate)""", 'engine 播放态判定')
@@ -138,13 +125,13 @@ s = sub(s, """        if cached == nil {
         }
     }""", 'engine 远程分支取封面')
 
-s = sub(s, """        p.play()
+s = sub(s, '''        p.play()
         isPlaying = true
-        status = "正在播放"""",
-    """        p.volume = volume
+        status = "正在播放"''',
+    '''        p.volume = volume
         p.play()
         isPlaying = true
-        status = "正在播放""", 'engine 应用音量')
+        status = "正在播放"''', 'engine 应用音量')
 
 s = sub(s, """    // MARK: - 队列 / 循环 / 随机""",
     """    func setVolume(_ v: Float) {
