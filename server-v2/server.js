@@ -328,28 +328,104 @@ app.get('/api/sources', auth, (req, res) => {
   res.json({ rows: rows.map(normalizeSource) });
 });
 
-app.get('/api/search', auth, limit('search', 30, 60000), async (req, res) => {
+// 从任意对象里挑第一个非空字符串
+function pickStr(o, keys) {
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (typeof v === 'number') return String(v);
+  }
+  return '';
+}
+
+// 把不同源的返回归一化成 {title, artist, url, cover}
+function normalizeItem(o) {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
+  const title = pickStr(o, ['title', 'name', 'song', 'songname', 'songName', 'track', 'trackName']);
+  if (!title) return null;
+  const artist = pickStr(o, ['artist', 'singer', 'author', 'artistName', 'artists', 'singerName']);
+  const url = pickStr(o, ['url', 'music_url', 'play_url', 'link', 'src', 'playUrl', 'songUrl', 'mp3']);
+  const cover = pickStr(o, ['cover', 'pic', 'album_pic', 'albumPic', 'img', 'image', 'picture', 'artwork']);
+  return { title, artist: artist || '未知歌手', url, cover };
+}
+
+// 递归收集，最多下钻 6 层
+function deepCollect(node, out, depth) {
+  if (depth > 6 || node == null) return;
+  if (Array.isArray(node)) {
+    for (const v of node) deepCollect(v, out, depth + 1);
+    return;
+  }
+  if (typeof node === 'object') {
+    const it = normalizeItem(node);
+    if (it) { out.push(it); return; }
+    for (const k of Object.keys(node)) deepCollect(node[k], out, depth + 1);
+  }
+}
+
+function buildSourceUrl(src, kw) {
+  const url = new URL(src.url);
+  const p = src.params ? safeJson(src.params) : null;
+  let injected = false;
+  if (p) {
+    for (const k of Object.keys(p)) {
+      const v = String(p[k]);
+      if (v.includes('{kw}')) {
+        url.searchParams.set(k, v.split('{kw}').join(kw));
+        injected = true;
+      } else {
+        url.searchParams.set(k, v);
+      }
+    }
+  }
+  if (!injected) {
+    if (url.searchParams.has('kw')) url.searchParams.set('kw', kw);
+    else if (url.searchParams.has('keyword')) url.searchParams.set('keyword', kw);
+    else if (url.searchParams.has('w')) url.searchParams.set('w', kw);
+    else url.searchParams.set('keyword', kw);
+  }
+  return url.toString();
+}
+
+// 多源聚合：所有启用的音乐源并发请求，结果合并去重
+app.get('/api/search', limit('search', 60, 60000), async (req, res) => {
   const kw = String(req.query.kw || req.query.keyword || '').trim();
   if (!kw) return res.status(400).json({ error: 'bad_keyword' });
+
   const rows = db.prepare("SELECT * FROM sources WHERE kind='music' AND enabled=1 ORDER BY sort ASC, id ASC").all();
-  for (const src of rows) {
-    const url = new URL(src.url);
-    const p = src.params ? safeJson(src.params) : {};
-    Object.keys(p || {}).forEach(k => url.searchParams.set(k, String(p[k]).replace('{kw}', kw)));
-    if (!p || !Object.values(p).some(v => String(v).includes('{kw}'))) {
-      url.searchParams.set('keyword', kw);
-      url.searchParams.set('kw', kw);
-    }
+  if (!rows.length) return res.json({ keyword: kw, count: 0, sources: [], rows: [] });
+
+  const tasks = rows.map(async (src) => {
+    let target;
+    try { target = buildSourceUrl(src, kw); } catch (_) { return { name: src.name, status: 0, ms: 0, items: [] }; }
     const h = src.headers ? safeJson(src.headers) : {};
-    const r = await fetchJson(url.toString(), { headers: h || {}, timeout: 15000 });
-    if (!r.ok || !r.json) continue;
-    const list = src.result_path ? pick(r.json, src.result_path) : pick(r.json, 'data') || pick(r.json, 'result') || r.json;
-    if (Array.isArray(list) && list.length) {
-      return res.json({ source: src.name, rows: list });
+    const r = await fetchJson(target, { headers: h || {}, timeout: 15000 });
+    const out = [];
+    if (r.json) deepCollect(r.json, out, 0);
+    db.prepare('UPDATE sources SET last_status=?, last_ms=?, checked_at=? WHERE id=?')
+      .run(r.status, r.ms, now(), src.id);
+    return { name: src.name, status: r.status, ms: r.ms, items: out };
+  });
+
+  const per = await Promise.all(tasks);
+  const seen = new Set();
+  const merged = [];
+  for (const r of per) {
+    for (const it of r.items) {
+      const key = it.title + '|' + it.artist;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push({ title: it.title, artist: it.artist, url: it.url, cover: it.cover, source: r.name });
     }
-    if (list && typeof list === 'object') return res.json({ source: src.name, rows: [list] });
   }
-  res.json({ source: null, rows: [] });
+
+  audit(null, 'search', kw + '/' + merged.length, req.ip);
+  res.json({
+    keyword: kw,
+    count: merged.length,
+    sources: per.map(r => ({ name: r.name, status: r.status, ms: r.ms, got: r.items.length })),
+    rows: merged
+  });
 });
 
 // ---------------- 播放票据（HMAC 短签） ----------------

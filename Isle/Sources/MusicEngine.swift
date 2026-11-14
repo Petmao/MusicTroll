@@ -38,8 +38,13 @@ final class MusicEngine: ObservableObject {
     private var itemObs: NSKeyValueObservation?
     private var usingFX = false
     private var lyricCache: [String: [LyricLine]] = [:]
-    /// 音源入口统一从 Config.apiBaseURL 派生，改域名只改 Config.swift 一处
-    private var apiBase: String {
+    /// 聚合搜索入口（读服务端 sources 表，多源并发）
+    private var searchBase: String {
+        Config.apiBaseURL.appendingPathComponent("api/search").absoluteString
+    }
+
+    /// 单曲兜底入口（v1 上游，sources 全空时用）
+    private var legacyBase: String {
         Config.apiBaseURL.appendingPathComponent("api/wxmusic").absoluteString
     }
 
@@ -80,7 +85,50 @@ final class MusicEngine: ObservableObject {
     }
 
     private func requestOnce(_ keyword: String) async throws -> [[String: Any]] {
-        guard var comps = URLComponents(string: apiBase) else { throw EngineError.api("bad_url") }
+        if let rows = try? await requestAggregated(keyword), !rows.isEmpty {
+            return rows
+        }
+        return try await requestLegacy(keyword)
+    }
+
+    /// 走服务端 /api/search：服务端读 sources 表，多源并发，合并去重
+    private func requestAggregated(_ keyword: String) async throws -> [[String: Any]] {
+        guard var comps = URLComponents(string: searchBase) else { throw EngineError.api("bad_url") }
+        comps.queryItems = [URLQueryItem(name: "kw", value: keyword)]
+        guard let url = comps.url else { throw EngineError.api("bad_url") }
+        var req = URLRequest(url: url, timeoutInterval: 40)
+        req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
+        if let t = Keychain.get("token") {
+            req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
+        }
+
+        let data: Data
+        do { (data, _) = try await URLSession.shared.data(for: req) }
+        catch let e as URLError {
+            switch e.code {
+            case .timedOut: throw EngineError.timeout
+            case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost:
+                throw EngineError.offline
+            default: throw EngineError.api(e.localizedDescription)
+            }
+        }
+
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rows = obj["rows"] as? [[String: Any]] else { return [] }
+
+        return rows.compactMap { r -> [String: Any]? in
+            let u = (r["url"] as? String) ?? ""
+            guard !u.isEmpty else { return nil }
+            return ["title": (r["title"] as? String) ?? keyword,
+                    "artist": (r["artist"] as? String) ?? "未知歌手",
+                    "url": u,
+                    "cover": (r["cover"] as? String) ?? ""]
+        }
+    }
+
+    /// v1 上游单曲兜底
+    private func requestLegacy(_ keyword: String) async throws -> [[String: Any]] {
+        guard var comps = URLComponents(string: legacyBase) else { throw EngineError.api("bad_url") }
         comps.queryItems = [
             URLQueryItem(name: "source", value: "third"),
             URLQueryItem(name: "keyword", value: keyword)
