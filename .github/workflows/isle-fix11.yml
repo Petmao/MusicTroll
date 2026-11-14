@@ -1,0 +1,40 @@
+name: isle-fix11
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch probe and default headers
+        run: python3 scripts/isle_patch14.py
+
+      - name: Verify
+        run: |
+          grep -n 'DEFAULT_FETCH_HEADERS' server-v2/core.js
+          grep -n 'buildSourceUrl(src' server-v2/server.js
+
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add server-v2/core.js server-v2/server.js server-v2/public/admin.html
+          git diff --cached --stat
+          git commit -m 'fix(probe): 测试连通性也替换 {kw} 并回传响应片段；fetchJson 默认带浏览器 UA/Accept'
+          git push origin HEAD:'猫巷。'
+
+      - name: Trigger pack-server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pack-server.yml --ref '猫巷。'
