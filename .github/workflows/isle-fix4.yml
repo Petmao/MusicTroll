@@ -1,0 +1,37 @@
+name: isle-fix4
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch engine and audio fx
+        run: python3 scripts/isle_patch4.py
+
+      - name: Patch player UI
+        run: python3 scripts/isle_patch5.py
+
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add -A
+          git commit -m 'fix(player): 上下曲队列兜底、seek 不中断播放、音量走引擎、喜欢按钮带触感与已喜欢态、播放列表可增删、网易云专辑封面回退'
+          git push origin HEAD:'猫巷。'
+
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'
