@@ -16,7 +16,7 @@ jobs:
       - name: Install ldid
         run: brew install ldid || true
       - name: Build unsigned ipa + tipa
-        run: VERSION=1.12.7 bash build.sh both
+        run: VERSION=1.12.8 bash build.sh both
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
@@ -32,13 +32,14 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.12.7
-          name: 屿声音乐 v1.12.7（封面与头像自选）
+          tag_name: v1.12.8
+          name: 屿声音乐 v1.12.8（封面与头像自选）
           body: |
-            - 歌单封面可长按更换，本地存储
-            - 头像可点按更换，上传到服务端 /api/user/avatar
+            - 歌单封面长按更换，本地存储，可恢复默认
+            - 头像点按更换，上传到服务端并即时刷新
             - 云同步接通：歌单与播放进度落库
-            - 导入歌单接通：网易云歌单链接可解析
-            - 设置里移除音乐源/视频源/设备管理入口
-            - 版本号 1.12.7
+            - 导入歌单接通：网易云歌单链接可解析曲目
+            - 设置移除音乐源/视频源/设备管理入口
+            - 修 PhotoPicker 闭包编译错误
+            - 版本号 1.12.8
           files: Isle.tipa
