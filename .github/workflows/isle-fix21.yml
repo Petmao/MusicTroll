@@ -1,0 +1,40 @@
+name: isle-fix21
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch import probe
+        run: python3 scripts/isle_patch28.py
+      - name: Patch instant player
+        run: python3 scripts/isle_patch29.py
+      - name: Syntax and verify
+        run: |
+          node --check server-v2/server.js
+          grep -c 'api/import/probe' server-v2/server.js
+          grep -c 'PlayerPresenter.shared.present' Isle/Sources/MusicEngine.swift
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add -A
+          git diff --cached --stat
+          git commit -m 'feat: 点歌立即弹播放器再后台加载；新增 /api/import/probe 诊断歌单导入'
+          git push origin HEAD:'猫巷。'
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'
+      - name: Trigger pack-server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pack-server.yml --ref '猫巷。'

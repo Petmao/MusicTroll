@@ -16,7 +16,7 @@ jobs:
       - name: Install ldid
         run: brew install ldid || true
       - name: Build unsigned ipa + tipa
-        run: VERSION=1.13.0 bash build.sh both
+        run: VERSION=1.13.1 bash build.sh both
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
@@ -32,13 +32,11 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.13.0
-          name: 屿声音乐 v1.13.0（搜索提速与歌单修复）
+          tag_name: v1.13.1
+          name: 屿声音乐 v1.13.1（点歌秒开播放器）
           body: |
-            - 搜索总预算 7 秒，慢源直接放弃，先返回已拿到的结果
-            - 同关键词 60 秒内走缓存，重复搜索秒出
-            - 单源超时 15 秒降到 6 秒
-            - 收藏列表可点击播放，心形改为独立点击区
-            - 歌单删除改用 Bool 弹窗 + 独立 ID，修删不掉
-            - 版本号 1.13.0
+            - 点任何歌曲立刻弹出播放器，封面位显示加载进度，URL 后台加载完自动开始播
+            - 播放器标题在音频未就绪时用队列里的歌名占位
+            - 服务端新增 /api/import/probe，一眼看出歌单导入卡在哪一步
+            - 版本号 1.13.1
           files: Isle.tipa
