@@ -16,7 +16,7 @@ jobs:
       - name: Install ldid
         run: brew install ldid || true
       - name: Build unsigned ipa + tipa
-        run: VERSION=1.12.9 bash build.sh both
+        run: VERSION=1.13.0 bash build.sh both
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
@@ -32,14 +32,13 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.12.9
-          name: 屿声音乐 v1.12.9（会员到期与歌单管理）
+          tag_name: v1.13.0
+          name: 屿声音乐 v1.13.0（搜索提速与歌单修复）
           body: |
-            - 会员到期本地判定，过期即视为免费，不再能用 VIP 功能
-            - 我的页会员卡显示 VIP/SVIP 徽章与到期日期、剩余天数
-            - 播放器全屏前校验 VIP，无权限直接进卡密页
-            - 歌单支持长按删除，二次确认
-            - 歌单封面临片改用 item 呈现，修复选图无反应
-            - 后台用户支持加 VIP / SVIP / 降级，天数可正可负
-            - 版本号 1.12.9
+            - 搜索总预算 7 秒，慢源直接放弃，先返回已拿到的结果
+            - 同关键词 60 秒内走缓存，重复搜索秒出
+            - 单源超时 15 秒降到 6 秒
+            - 收藏列表可点击播放，心形改为独立点击区
+            - 歌单删除改用 Bool 弹窗 + 独立 ID，修删不掉
+            - 版本号 1.13.0
           files: Isle.tipa

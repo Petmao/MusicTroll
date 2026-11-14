@@ -1,0 +1,40 @@
+name: isle-fix20
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch search speed
+        run: python3 scripts/isle_patch26.py
+      - name: Patch library play and delete
+        run: python3 scripts/isle_patch27.py
+      - name: Syntax and verify
+        run: |
+          node --check server-v2/server.js
+          grep -c SEARCH_BUDGET_MS server-v2/server.js
+          grep -c showDeleteAlert Isle/Features/LibraryView.swift
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add -A
+          git diff --cached --stat
+          git commit -m 'perf(search): 总预算 7 秒 + 60 秒缓存 + 单源 6 秒；fix: 收藏可点播、歌单删除生效'
+          git push origin HEAD:'猫巷。'
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'
+      - name: Trigger pack-server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pack-server.yml --ref '猫巷。'
