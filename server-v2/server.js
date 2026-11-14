@@ -294,13 +294,19 @@ app.post('/api/device/unbind', auth, (req, res) => {
 // ---------------- 源 ----------------
 
 function normalizeSource(r) {
+  const ok = r.last_status && r.last_status >= 200 && r.last_status < 400;
   return {
     id: r.id, kind: r.kind, name: r.name, url: r.url, method: r.method,
     headers: r.headers ? safeJson(r.headers) : null,
     params: r.params ? safeJson(r.params) : null,
     resultPath: r.result_path, note: r.note,
     enabled: !!r.enabled, sort: r.sort,
-    lastStatus: r.last_status, lastMs: r.last_ms, checkedAt: r.checked_at
+    // 后台用数字，客户端用字符串，两套都给，避免类型不匹配导致解码整包失败
+    lastStatus: r.last_status,
+    lastMs: r.last_ms,
+    last_status: r.last_status ? (ok ? 'ok' : 'fail') : null,
+    last_ms: r.last_ms,
+    checkedAt: r.checked_at
   };
 }
 
@@ -343,7 +349,7 @@ async function probeSource(src) {
 app.get('/api/sources', auth, (req, res) => {
   const kind = String(req.query.kind || 'music');
   const rows = db.prepare('SELECT * FROM sources WHERE kind=? AND enabled=1 ORDER BY sort ASC, id ASC').all(kind);
-  res.json({ rows: rows.map(normalizeSource) });
+  res.json({ kind, rows: rows.map(normalizeSource) });
 });
 
 // 从任意对象里挑第一个非空字符串
@@ -455,6 +461,62 @@ app.get('/api/search', limit('search', 60, 60000), async (req, res) => {
     sources: per.map(r => ({ name: r.name, status: r.status, ms: r.ms, got: r.items.length })),
     rows: merged
   });
+});
+
+// ---------------- 视频：从后台配的视频源里抽出可播地址 ----------------
+
+function collectMedia(node, out, depth) {
+  if (depth > 6 || node == null) return;
+  if (Array.isArray(node)) {
+    for (const v of node) collectMedia(v, out, depth + 1);
+    return;
+  }
+  if (typeof node === 'object') {
+    const url = pickStr(node, ['url', 'video', 'src', 'mp4', 'play_url', 'video_url', 'file', 'link', 'videoUrl']);
+    if (/^https?:\/\//i.test(url)) {
+      out.push({
+        url,
+        title: pickStr(node, ['title', 'name', 'desc', 'description', 'caption', 'text']) || '',
+        cover: pickStr(node, ['cover', 'pic', 'poster', 'image', 'thumb', 'thumbnail', 'img']) || ''
+      });
+      return;
+    }
+    for (const k of Object.keys(node)) collectMedia(node[k], out, depth + 1);
+  }
+}
+
+app.get('/api/videos', auth, limit('videos', 60, 60000), async (req, res) => {
+  const srcId = Number(req.query.src || 0);
+  const rows = srcId
+    ? db.prepare("SELECT * FROM sources WHERE kind='video' AND id=? AND enabled=1").all(srcId)
+    : db.prepare("SELECT * FROM sources WHERE kind='video' AND enabled=1 ORDER BY sort ASC, id ASC").all();
+
+  if (!rows.length) return res.json({ count: 0, sources: [], rows: [] });
+
+  const out = [];
+  const seen = new Set();
+  const report = [];
+
+  for (const src of rows) {
+    let target;
+    try { target = buildSourceUrl(src, String(req.query.kw || '')); } catch (_) { continue; }
+    const h = src.headers ? safeJson(src.headers) : {};
+    const r = await fetchJson(target, { headers: h || {}, timeout: 15000 });
+    const items = [];
+    if (r.json) collectMedia(r.json, items, 0);
+    db.prepare('UPDATE sources SET last_status=?, last_ms=?, checked_at=? WHERE id=?')
+      .run(r.status, r.ms, now(), src.id);
+    report.push({ name: src.name, status: r.status, ms: r.ms, got: items.length });
+
+    for (const it of items) {
+      if (seen.has(it.url)) continue;
+      seen.add(it.url);
+      out.push({ url: it.url, title: it.title, cover: it.cover, source: src.name });
+    }
+  }
+
+  audit(null, 'videos', String(out.length), req.ip);
+  res.json({ count: out.length, sources: report, rows: out });
 });
 
 // ---------------- 播放票据（HMAC 短签） ----------------

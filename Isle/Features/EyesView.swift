@@ -3,7 +3,7 @@ import AVFoundation
 
 struct EyesView: View {
     @EnvironmentObject var auth: AuthStore
-    @State private var sources: [SourceItem] = []
+    @State private var videos: [VideoItem] = []
     @State private var loading = true
     @State private var index = 0
     @State private var queuePlayer: AVQueuePlayer?
@@ -15,7 +15,7 @@ struct EyesView: View {
             Color.black.ignoresSafeArea()
             if loading {
                 ProgressView().tint(.white)
-            } else if sources.isEmpty {
+            } else if videos.isEmpty {
                 emptyState
             } else if queuePlayer != nil {
                 VideoSurface(player: queuePlayer!)
@@ -103,34 +103,35 @@ struct EyesView: View {
     private var notDirectLink: some View {
         VStack(spacing: 10) {
             IsleIcon(IsleSymbol.video, scale: .hero, tint: Color.white.opacity(0.4))
-            Text(sources[min(index, sources.count - 1)].name)
+            Text(videos[min(index, videos.count - 1)].title ?? "视频")
                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.white.opacity(0.8))
-            Text("该源不是直链视频").font(.system(size: 10.5)).foregroundStyle(Color.white.opacity(0.35))
+            Text("这条地址不是可播视频").font(.system(size: 10.5)).foregroundStyle(Color.white.opacity(0.35))
         }
     }
 
     private func load() async {
         loading = true
-        sources = (try? await APIClient.shared.sources(kind: "video")) ?? []
+        // 不再直接拿源地址当视频播，交给服务端 /api/videos 从源里抽可播 url
+        videos = (try? await APIClient.shared.videos()) ?? []
         loading = false
         prepare(0)
     }
 
     private func step(_ delta: Int) {
-        guard !sources.isEmpty else { return }
-        let next = (index + delta + sources.count) % sources.count
+        guard !videos.isEmpty else { return }
+        let next = (index + delta + videos.count) % videos.count
         prepare(next)
     }
 
     private func prepare(_ i: Int) {
-        guard !sources.isEmpty else { return }
-        index = max(0, min(i, sources.count - 1))
-        let src = sources[index]
+        guard !videos.isEmpty else { return }
+        index = max(0, min(i, videos.count - 1))
+        let v = videos[index]
         queuePlayer?.pause()
         looper = nil
         queuePlayer = nil
 
-        guard let url = URL(string: src.url),
+        guard let url = URL(string: v.url),
               let scheme = url.scheme?.lowercased(),
               ["http", "https"].contains(scheme) else { return }
 

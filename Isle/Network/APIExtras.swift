@@ -46,3 +46,27 @@ extension APIClient {
         return r.songs
     }
 }
+
+
+/// 视频源聚合结果
+struct VideoItem: Codable, Identifiable {
+    var id: String { url }
+    let url: String
+    let title: String?
+    let cover: String?
+    let source: String?
+}
+
+struct VideosResp: Codable {
+    let count: Int
+    let rows: [VideoItem]
+}
+
+extension APIClient {
+    /// 从后台配置的视频源里抽出可播地址（服务端已做归一化与去重）
+    func videos(srcId: Int? = nil) async throws -> [VideoItem] {
+        let q = srcId.map { "?src=\($0)" } ?? ""
+        let r: VideosResp = try await get("/api/videos\(q)")
+        return r.rows
+    }
+}
