@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// 登录 / 注册
+/// 注意：这里刻意不用 @FocusState。iOS 15/16 上 ScrollView 内的 @FocusState
+/// 配合 .focused() 与回收式条件布局，点击输入框会触发 EXC_BAD_ACCESS。
+/// 焦点交回系统管理，键盘收起由系统处理。
 struct LoginView: View {
     @EnvironmentObject var auth: AuthStore
 
@@ -10,9 +14,6 @@ struct LoginView: View {
     @State private var phone = ""
     @State private var invite = ""
 
-    private enum Field: Hashable { case nickname, account, password, phone, invite }
-    @FocusState private var focused: Field?
-
     var body: some View {
         ZStack {
             LinearGradient(colors: [Color(red: 0.24, green: 0.06, blue: 0.28),
@@ -22,15 +23,21 @@ struct LoginView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    header.padding(.top, 32)
+                    IsleBrandMark()
+                        .padding(.top, 30)
+
                     switcher.padding(.top, 22)
 
-                    VStack(spacing: 0) {
-                        row("昵称", $nickname, "person", .nickname, secure: false, visible: isRegister)
-                        row("账号（字母开头，4–16 位）", $account, "at", .account, secure: false, visible: true)
-                        row("密码（至少 8 位）", $password, "lock", .password, secure: true, visible: true)
-                        row("手机号（选填）", $phone, "phone", .phone, secure: false, visible: isRegister)
-                        row("邀请码（选填）", $invite, "gift", .invite, secure: false, visible: isRegister)
+                    VStack(spacing: 10) {
+                        if isRegister {
+                            field("昵称", $nickname, "person")
+                        }
+                        field("账号（字母开头，4–16 位）", $account, "at")
+                        field("密码（至少 8 位）", $password, "lock", secure: true)
+                        if isRegister {
+                            field("手机号（选填）", $phone, "phone", keyboard: .numberPad)
+                            field("邀请码（选填）", $invite, "gift")
+                        }
                     }
                     .padding(.top, 16)
 
@@ -55,17 +62,11 @@ struct LoginView: View {
                 }
                 .padding(.horizontal, 24)
             }
-            .onTapGesture { focused = nil }
         }
     }
 
-    // MARK: - 头部
-    private var header: some View {
-        IsleBrandMark()
-            .padding(.top, 6)
-    }
-
     // MARK: - 切换
+
     private var switcher: some View {
         HStack(spacing: 4) {
             seg("登录", 0)
@@ -79,7 +80,6 @@ struct LoginView: View {
     private func seg(_ title: String, _ index: Int) -> some View {
         let active = (isRegister ? 1 : 0) == index
         return Button {
-            focused = nil
             isRegister = (index == 1)
             auth.error = nil
         } label: {
@@ -100,9 +100,12 @@ struct LoginView: View {
     }
 
     // MARK: - 输入行
-    @ViewBuilder
-    private func row(_ title: String, _ binding: Binding<String>, _ symbol: String,
-                     _ id: Field, secure: Bool, visible: Bool) -> some View {
+
+    private func field(_ title: String,
+                       _ binding: Binding<String>,
+                       _ symbol: String,
+                       secure: Bool = false,
+                       keyboard: UIKeyboardType = .default) -> some View {
         HStack(spacing: 10) {
             Image(systemName: symbol)
                 .font(.system(size: 13))
@@ -111,13 +114,11 @@ struct LoginView: View {
 
             if secure {
                 SecureField(title, text: binding)
-                    .focused($focused, equals: id)
-                    .submitLabel(.done)
             } else {
                 TextField(title, text: binding)
-                    .focused($focused, equals: id)
-                    .keyboardType(id == .phone ? .numberPad : .default)
-                    .submitLabel(id == .password ? .done : .next)
+                    .keyboardType(keyboard)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
             }
         }
         .font(.system(size: 15))
@@ -126,14 +127,10 @@ struct LoginView: View {
         .background(Color.white.opacity(0.06))
         .overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.white.opacity(0.1), lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 15))
-        .padding(.bottom, visible ? 10 : 0)
-        .frame(height: visible ? nil : 0)
-        .opacity(visible ? 1 : 0)
-        .clipped()
-        .allowsHitTesting(visible)
     }
 
     // MARK: - 主按钮
+
     private var submitButton: some View {
         let ready = !account.isEmpty && password.count >= 8 && !auth.loading
         return Button(action: submit) {
@@ -157,6 +154,7 @@ struct LoginView: View {
     }
 
     // MARK: - 卖点
+
     private var featureList: some View {
         VStack(spacing: 12) {
             feature("square.stack.3d.up", "多源并发", "一次搜索同时问 5 个音源，先到先出")
@@ -185,6 +183,7 @@ struct LoginView: View {
     }
 
     // MARK: - 免责声明
+
     private var disclaimer: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
@@ -208,7 +207,6 @@ struct LoginView: View {
     }
 
     private func submit() {
-        focused = nil
         Task {
             if isRegister {
                 await auth.register(account: account,
