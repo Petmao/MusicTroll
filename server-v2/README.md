@@ -84,7 +84,7 @@ curl -s http://127.0.0.1:8787/api/health
 ```nginx
 server {
     listen 80;
-    server_name ys.example.com;
+    server_name ys.irepo.cn;
 
     client_max_body_size 20m;
 
@@ -103,31 +103,33 @@ server {
 
 ```bash
 nginx -t && systemctl reload nginx
-certbot --nginx -d ys.example.com
+certbot --nginx -d ys.irepo.cn
 ```
 
 ### 5. 客户端指向新域名
 
 `Isle/Config.swift` 里那段 Base64 拆两段，改完重新构建：
 
+当前 `Isle/Config.swift` 已经指向 `https://ys.irepo.cn`，两段 Base64 分别是：
+
 ```swift
-static let apiBaseURL: URL = {
-    let parts = ["aHR0cHM6Ly8=", "eXMuaXJlcG8uY24="]  // https:// + 域名
-    ...
-}()
+let parts = ["aHR0cHM6Ly8=", "eXMuaXJlcG8uY24="]
+//              https://          ys.irepo.cn
 ```
+
+要换域名，分别生成两段：
 
 生成：
 
 ```bash
-echo -n 'https://ys.example.com' | base64
+echo -n 'https://ys.irepo.cn' | base64
 # aHR0cHM6Ly95cy5leGFtcGxlLmNvbQ==
 ```
 
 把后半段（去掉 `https://` 的结果）换进 `parts[1]`：
 
 ```bash
-echo -n 'ys.example.com' | base64
+echo -n 'ys.irepo.cn' | base64
 ```
 
 ## Casdoor 接入
@@ -154,13 +156,13 @@ docker run -d --name casdoor \
 2. `应用` → 编辑 `app-built-in`
    - 回调 URL 填 `isle://auth`
    - 记下 `Client ID` 与 `Client Secret`
-3. 需要微信登录就在 `身份提供商` 里加 WeChat，填 AppID/AppSecret，回调填 `https://door.example.com/callback`
+3. 需要微信登录就在 `身份提供商` 里加 WeChat，填 AppID/AppSecret，回调填 `https://door.ys.irepo.cn/callback`
 
 ### 打开开关
 
 ```ini
 CASDOOR_ENABLED=1
-CASDOOR_ENDPOINT=https://door.example.com
+CASDOOR_ENDPOINT=https://door.ys.irepo.cn
 CASDOOR_CLIENT_ID=你的 Client ID
 CASDOOR_CLIENT_SECRET=你的 Client Secret
 CASDOOR_ORG=built-in
@@ -249,10 +251,10 @@ docker compose restart isle
 
 ```bash
 # 拉源列表
-curl -H "X-Api-Key: isle_xxx" "https://ys.example.com/open/v1/sources?kind=music"
+curl -H "X-Api-Key: isle_xxx" "https://ys.irepo.cn/open/v1/sources?kind=music"
 
 # 代搜索
-curl -H "X-Api-Key: isle_xxx" "https://ys.example.com/open/v1/search?kw=夜航星"
+curl -H "X-Api-Key: isle_xxx" "https://ys.irepo.cn/open/v1/search?kw=夜航星"
 ```
 
 返回：

@@ -38,7 +38,10 @@ final class MusicEngine: ObservableObject {
     private var itemObs: NSKeyValueObservation?
     private var usingFX = false
     private var lyricCache: [String: [LyricLine]] = [:]
-    private let apiBase = "https://api.irepo.cn/api/wxmusic"
+    /// 音源入口统一从 Config.apiBaseURL 派生，改域名只改 Config.swift 一处
+    private var apiBase: String {
+        Config.apiBaseURL.appendingPathComponent("api/wxmusic").absoluteString
+    }
 
     enum EngineError: Error, LocalizedError {
         case noResult, noUrl, timeout, offline

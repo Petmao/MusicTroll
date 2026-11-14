@@ -593,6 +593,24 @@ app.get('/open/v1/search', apiKeyAuth, limit('open', 60, 60000), async (req, res
   res.json({ keyword: kw, results: out });
 });
 
+// ---------------- 兼容 v1 客户端：音源转发 ----------------
+
+app.get('/api/wxmusic', limit('wx', 60, 60000), async (req, res) => {
+  const base = process.env.UPSTREAM_MUSIC_API || 'https://api.irepo.cn/api/wxmusic';
+  let u;
+  try { u = new URL(base); } catch (_) { return res.status(500).json({ code: 500, msg: 'bad_upstream' }); }
+  Object.keys(req.query).forEach(k => u.searchParams.set(k, String(req.query[k])));
+  const r = await fetchJson(u.toString(), {
+    headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' },
+    timeout: 25000
+  });
+  if (!r.json) {
+    return res.status(502).json({ code: 502, msg: 'upstream_failed', status: r.status });
+  }
+  audit(null, 'wxmusic_proxy', String(req.query.keyword || '') + '/' + r.status, req.ip);
+  res.json(r.json);
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, name: 'Isle Music API v2', version: '2.0.0', casdoor: C.casdoor.enabled, time: new Date().toISOString() });
 });
