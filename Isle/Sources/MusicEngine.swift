@@ -22,6 +22,16 @@ final class MusicEngine: ObservableObject {
     @Published var lyrics: [LyricLine] = []
     @Published var lyricState: String = ""
 
+    enum RepeatMode: String { case off, all, one }
+
+    @Published var queue: [String] = []
+    @Published var queueIndex: Int = -1
+    @Published var repeatMode: RepeatMode = .off
+    @Published var shuffleOn = false
+
+    private var endObs: NSObjectProtocol?
+    private var endGuard = false
+
     private var player: AVPlayer?
     private var ticker: Timer?
     private var itemObs: NSKeyValueObservation?
@@ -108,19 +118,11 @@ final class MusicEngine: ObservableObject {
     // MARK: - 播放
 
     func play(keyword: String) async {
-        status = "搜索中…"
-        do {
-            let list = try await search(keyword)
-            guard let first = list.first else { throw EngineError.noResult }
-            try await playItem(first, keyword: keyword)
-            PlayerPresenter.shared.present()
-        } catch {
-            status = (error as? LocalizedError)?.errorDescription ?? "播放失败：\(error)"
-            isPlaying = false
-        }
+        await playQueue([keyword], startAt: 0, present: true)
     }
 
     func playItem(_ item: [String: Any], keyword: String) async throws {
+        endGuard = false
         let title = (item["title"] as? String) ?? keyword
         let artist = (item["artist"] as? String) ?? "未知歌手"
         guard let raw = item["url"] as? String, let up = URL(string: raw) else {
@@ -196,6 +198,7 @@ final class MusicEngine: ObservableObject {
         isPlaying = true
         status = "正在播放"
         startTick()
+        observeEnd(of: it)
 
         if cached == nil {
             PlaybackCache.shared.download(playURL)
@@ -278,6 +281,94 @@ final class MusicEngine: ObservableObject {
         progress = ratio
     }
 
+    // MARK: - 队列 / 循环 / 随机
+
+    func playQueue(_ titles: [String], startAt index: Int, present: Bool = true) async {
+        guard !titles.isEmpty else { return }
+        queue = titles
+        queueIndex = max(0, min(index, titles.count - 1))
+        await loadQueueItem(present: present)
+    }
+
+    func loadQueueItem(present: Bool) async {
+        guard queueIndex >= 0, queueIndex < queue.count else { return }
+        let kw = queue[queueIndex]
+        status = "搜索中…"
+        do {
+            let list = try await search(kw)
+            guard let first = list.first else { throw EngineError.noResult }
+            try await playItem(first, keyword: kw)
+            if present { PlayerPresenter.shared.present() }
+        } catch {
+            status = (error as? LocalizedError)?.errorDescription ?? "播放失败：\(error)"
+            isPlaying = false
+            if queueIndex < queue.count - 1 { nextTrack() }
+        }
+    }
+
+    func nextTrack(auto: Bool = false) {
+        guard !queue.isEmpty else { return }
+        if auto, repeatMode == .one {
+            seek(toSeconds: 0)
+            if !isPlaying { toggle() }
+            return
+        }
+        if shuffleOn, queue.count > 1 {
+            var n = Int.random(in: 0..<queue.count)
+            if n == queueIndex { n = (n + 1) % queue.count }
+            queueIndex = n
+        } else {
+            queueIndex += 1
+            if queueIndex >= queue.count {
+                if repeatMode == .all {
+                    queueIndex = 0
+                } else {
+                    queueIndex = queue.count - 1
+                    status = "播放完毕"
+                    return
+                }
+            }
+        }
+        Task { await loadQueueItem(present: false) }
+    }
+
+    func previousTrack() {
+        guard !queue.isEmpty else { return }
+        if currentSeconds() > 3 {
+            seek(toSeconds: 0)
+            return
+        }
+        queueIndex -= 1
+        if queueIndex < 0 {
+            queueIndex = repeatMode == .all ? queue.count - 1 : 0
+        }
+        Task { await loadQueueItem(present: false) }
+    }
+
+    func toggleRepeat() {
+        switch repeatMode {
+        case .off: repeatMode = .all
+        case .all: repeatMode = .one
+        case .one: repeatMode = .off
+        }
+    }
+
+    func toggleShuffle() { shuffleOn.toggle() }
+
+    private func observeEnd(of item: AVPlayerItem) {
+        if let o = endObs { NotificationCenter.default.removeObserver(o) }
+        endObs = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.nextTrack(auto: true)
+            }
+        }
+    }
+
     private func startTick() {
         ticker?.invalidate()
         ticker = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -292,6 +383,11 @@ final class MusicEngine: ObservableObject {
                         self.progress = min(1, max(0, t / d))
                     }
                     self.isPlaying = AudioFX.shared.isPlaying
+                    if d > 0, t >= d - 0.4, !self.endGuard {
+                        self.endGuard = true
+                        self.nextTrack(auto: true)
+                    }
+                    if t < d - 1 { self.endGuard = false }
                     return
                 }
 

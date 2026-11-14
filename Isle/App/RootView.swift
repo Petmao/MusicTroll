@@ -26,6 +26,7 @@ struct RootView: View {
             IsleBackground()
             VStack(spacing: 0) {
                 content
+                MiniPlayerBar()
                 TabBarView(tab: $tab)
             }
         }

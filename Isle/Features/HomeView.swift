@@ -310,7 +310,7 @@ struct HomeView: View {
     }
 
     private func newSongRow(_ i: Int, _ s: Song) -> some View {
-        Button { play(s.title) } label: {
+        Button { playFrom(i) } label: {
             HStack(spacing: 10) {
                 Text(String(format: "%02d", i + 1))
                     .font(.system(size: 11, weight: .bold))
@@ -338,6 +338,21 @@ struct HomeView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
+    }
+
+    private func playFrom(_ i: Int) {
+        guard i >= 0, i < DemoData.newSongs.count else { return }
+        busy = true
+        toast = "正在搜索「\(DemoData.newSongs[i].title)」…"
+        Task {
+            await engine.playQueue(DemoData.newSongs.map { $0.title }, startAt: i)
+            await MainActor.run {
+                busy = false
+                toast = engine.isPlaying ? "正在播放：\(engine.current?.title ?? "") " : engine.status
+            }
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            await MainActor.run { withAnimation { toast = nil } }
+        }
     }
 
     private func play(_ kw: String) {

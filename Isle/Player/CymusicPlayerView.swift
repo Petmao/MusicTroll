@@ -281,8 +281,8 @@ struct CymusicPlayerView: View {
             }
     }
 
-    private func skipNext() { engine.seek(to: min(1, engine.progress + 0.05)) }
-    private func skipPrevious() { engine.seek(to: max(0, engine.progress - 0.05)) }
+    private func skipNext() { engine.nextTrack() }
+    private func skipPrevious() { engine.previousTrack() }
 
     private func controlsPanel(bottom: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -326,6 +326,9 @@ struct CymusicPlayerView: View {
                 }
             } label: { Label("喜欢 / 取消喜欢", systemImage: "heart") }
             Button { toggleLyrics() } label: { Label("歌词", systemImage: "text.quote") }
+            Button { engine.toggleShuffle() } label: {
+                Label(engine.shuffleOn ? "关闭随机播放" : "随机播放", systemImage: "shuffle")
+            }
             Button { showQueue = true } label: { Label("播放列表", systemImage: "list.bullet") }
             if #available(iOS 16.0, *) {
                 if let t = engine.current?.title {
@@ -425,10 +428,10 @@ struct CymusicPlayerView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button { showQueue = true } label: {
-                Image(systemName: "repeat")
+            Button { engine.toggleRepeat() } label: {
+                Image(systemName: engine.repeatMode == .one ? "repeat.1" : "repeat")
                     .font(.system(size: 26))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(engine.repeatMode == .off ? Color.white.opacity(0.45) : Color.white)
             }
             .frame(maxWidth: .infinity, alignment: .center)
 
