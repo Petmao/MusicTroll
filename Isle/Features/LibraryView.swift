@@ -39,6 +39,15 @@ final class PlaylistStore: ObservableObject {
         save()
     }
 
+    /// 「我喜欢的音乐」歌单 id，没有就建一个
+    func favoritePlaylistID() -> UUID {
+        if let p = lists.first(where: { $0.name == "我喜欢的音乐" }) { return p.id }
+        let p = IslePlaylist(name: "我喜欢的音乐")
+        lists.insert(p, at: 0)
+        save()
+        return p.id
+    }
+
     private func save() {
         if let d = try? JSONEncoder().encode(lists) {
             UserDefaults.standard.set(d, forKey: key)
@@ -331,6 +340,109 @@ struct PlaylistDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } }
+            }
+        }
+    }
+}
+
+
+struct AddToPlaylistSheet: View {
+    let title: String
+    @ObservedObject private var store = PlaylistStore.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var newName = ""
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                IsleBackground()
+                VStack(spacing: 12) {
+                    HStack(spacing: 8) {
+                        TextField("新建歌单名", text: $newName)
+                            .font(.system(size: 13))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                            .padding(11)
+                            .background(IsleColor.surfaceHi)
+                            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+                        Button {
+                            let n = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !n.isEmpty else { return }
+                            store.add(n)
+                            if let id = store.favoritePlaylistID() as UUID? {
+                                _ = id
+                            }
+                            if let first = store.lists.first {
+                                store.addSong(title, to: first.id)
+                            }
+                            dismiss()
+                        } label: {
+                            Text("新建并加入")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Color.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(IsleColor.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 8) {
+                            ForEach(store.lists) { p in
+                                Button {
+                                    store.addSong(title, to: p.id)
+                                    dismiss()
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                                .fill(IsleColor.pink.opacity(0.18))
+                                                .frame(width: 34, height: 34)
+                                            IsleIcon(IsleSymbol.music, scale: .sm, tint: IsleColor.pinkLight)
+                                        }
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(p.name)
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundStyle(Color.white)
+                                                .lineLimit(1)
+                                            Text("\(p.songs.count) 首")
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(IsleColor.textSub)
+                                        }
+                                        Spacer(minLength: 0)
+                                        if p.songs.contains(title) {
+                                            Text("已在其中")
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(IsleColor.mint)
+                                        } else {
+                                            IsleIcon(IsleSymbol.plus, scale: .sm, tint: Color.white.opacity(0.4))
+                                        }
+                                    }
+                                    .padding(11)
+                                    .background(IsleColor.surface)
+                                    .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                        .stroke(IsleColor.line, lineWidth: 1))
+                                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                }
+            }
+            .navigationTitle("加入歌单")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("取消") { dismiss() }
+                }
             }
         }
     }

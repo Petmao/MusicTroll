@@ -327,9 +327,12 @@ struct CymusicPlayerView: View {
         return Button {
             guard !t.isEmpty else { return }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.6)) {
-                _ = fav.toggle(title: t, artist: a)
+            let likedNow = fav.toggle(title: t, artist: a)
+            if likedNow {
+                let pid = PlaylistStore.shared.favoritePlaylistID()
+                PlaylistStore.shared.addSong(t, to: pid)
             }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.6)) {}
         } label: {
             Image(systemName: liked ? "heart.fill" : "heart")
                 .font(.system(size: 19, weight: .medium))

@@ -8,6 +8,8 @@ struct SearchView: View {
     @State private var searching = false
     @State private var tip: String?
     @State private var tab = 0
+    @State private var addTarget = ""
+    @State private var showAdd = false
 
     private let tabs = ["综合", "单曲", "歌单", "歌手", "专辑"]
     private let covers: [Color] = [
@@ -38,6 +40,9 @@ struct SearchView: View {
         }
         .navigationTitle("搜索全网")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showAdd) {
+            AddToPlaylistSheet(title: addTarget)
+        }
     }
 
     private var searchBar: some View {
@@ -209,7 +214,31 @@ struct SearchView: View {
 
                 Spacer(minLength: 6)
 
-                IsleIcon(IsleSymbol.more, scale: .sm, tint: Color.white.opacity(0.35))
+                Menu {
+                    Button {
+                        Task { await playAt(idx) }
+                    } label: {
+                        Label("播放", systemImage: "play.fill")
+                    }
+
+                    Button {
+                        addTarget = title
+                        showAdd = true
+                    } label: {
+                        Label("加入歌单", systemImage: "text.badge.plus")
+                    }
+
+                    Button {
+                        let id = PlaylistStore.shared.favoritePlaylistID()
+                        PlaylistStore.shared.addSong(title, to: id)
+                    } label: {
+                        Label("加入我喜欢的音乐", systemImage: "heart")
+                    }
+                } label: {
+                    IsleIcon(IsleSymbol.more, scale: .sm, tint: Color.white.opacity(0.5))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
             }
             .padding(12)
             .background(IsleColor.surface)
