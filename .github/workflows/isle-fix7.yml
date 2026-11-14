@@ -18,17 +18,21 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Patch metal linkage and CIContext
-        run: python3 scripts/isle_patch8.py
+        run: python3 scripts/isle_patch9.py
 
-      - name: Verify build.sh linkage
-        run: grep -n 'framework Metal' build.sh && grep -n 'VERSION:-1.12.0' build.sh
+      - name: Verify
+        run: |
+          grep -n 'framework Metal' build.sh
+          grep -n 'VERSION:-1.12.0' build.sh
+          grep -n 'useSoftwareRenderer' Isle/Support/LinkFix.swift Isle/Player/CymusicPalette.swift
 
       - name: Commit and push
         run: |
           git config user.name 'Isle Bot'
           git config user.email 'bot@isle.local'
-          git add -A
-          git commit -m 'fix(crash): 链接 Metal/MetalKit/CoreVideo，LinkFix 补 dlopen 并预热 CPU CIContext，修键盘候选栏 pc=0；版本提到 1.12.0'
+          git add build.sh Isle/Support/LinkFix.swift Isle/Player/CymusicPalette.swift
+          git diff --cached --stat
+          git commit -m 'fix(crash): 链接 Metal/MetalKit/CoreVideo，LinkFix 补 dlopen 与 CPU CIContext 预热，修键盘候选栏 pc=0'
           git push origin HEAD:'猫巷。'
 
       - name: Trigger build-ipa
