@@ -1,0 +1,40 @@
+name: isle-fix9
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch playlist actions
+        run: python3 scripts/isle_patch12.py
+
+      - name: Verify
+        run: |
+          grep -n 'struct AddToPlaylistSheet' Isle/Features/LibraryView.swift
+          grep -n 'favoritePlaylistID' Isle/Features/LibraryView.swift Isle/Features/SearchView.swift Isle/Player/CymusicPlayerView.swift
+
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add Isle/Features/LibraryView.swift Isle/Features/SearchView.swift Isle/Player/CymusicPlayerView.swift
+          git diff --cached --stat
+          git commit -m 'feat(playlist): 搜索结果可加入歌单/我喜欢的音乐，播放器红心同步进歌单'
+          git push origin HEAD:'猫巷。'
+
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'
