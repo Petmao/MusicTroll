@@ -105,9 +105,9 @@ struct LoginView: View {
                      _ id: Field, secure: Bool, visible: Bool) -> some View {
         HStack(spacing: 10) {
             Image(systemName: symbol)
-                .font(.system(size: 15))
+                .font(.system(size: 13))
                 .foregroundStyle(Color.white.opacity(0.4))
-                .frame(width: 20)
+                .frame(width: 18)
 
             if secure {
                 SecureField(title, text: binding)
@@ -169,11 +169,11 @@ struct LoginView: View {
     private func feature(_ symbol: String, _ title: String, _ desc: String) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 9)
                     .fill(Color.white.opacity(0.07))
-                    .frame(width: 34, height: 34)
+                    .frame(width: 30, height: 30)
                 Image(systemName: symbol)
-                    .font(.system(size: 15))
+                    .font(.system(size: 13))
                     .foregroundStyle(Color(red: 1, green: 0.45, blue: 0.62))
             }
             VStack(alignment: .leading, spacing: 2) {
@@ -189,7 +189,7 @@ struct LoginView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.shield")
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .foregroundStyle(Color.white.opacity(0.35))
                 Text("免责声明")
                     .font(.system(size: 11, weight: .semibold))

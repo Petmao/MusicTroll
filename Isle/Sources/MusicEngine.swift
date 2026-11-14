@@ -113,6 +113,7 @@ final class MusicEngine: ObservableObject {
             let list = try await search(keyword)
             guard let first = list.first else { throw EngineError.noResult }
             try await playItem(first, keyword: keyword)
+            PlayerPresenter.shared.present()
         } catch {
             status = (error as? LocalizedError)?.errorDescription ?? "播放失败：\(error)"
             isPlaying = false

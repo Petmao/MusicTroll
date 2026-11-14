@@ -167,7 +167,7 @@ struct HomeView: View {
             }
             NavigationLink(destination: CheckinView()) {
                 IsleIcon(IsleSymbol.clock, scale: .md, tint: Color.white.opacity(0.88))
-                    .frame(width: 34, height: 34)
+                    .frame(width: 30, height: 30)
                     .background(Circle().fill(Color.white.opacity(0.07)))
                     .overlay(Circle().stroke(IsleColor.pink.opacity(0.22), lineWidth: 0.8))
             }

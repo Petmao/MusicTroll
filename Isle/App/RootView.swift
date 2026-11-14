@@ -18,6 +18,7 @@ struct MineTheme {
 
 struct RootView: View {
     @EnvironmentObject var auth: AuthStore
+    @StateObject private var player = PlayerPresenter.shared
     @State private var tab = 0
 
     var body: some View {
@@ -25,12 +26,13 @@ struct RootView: View {
             IsleBackground()
             VStack(spacing: 0) {
                 content
-                if tab != 2 {
-                    TabBarView(tab: $tab)
-                }
+                TabBarView(tab: $tab)
             }
         }
         .preferredColorScheme(.dark)
+        .fullScreenCover(isPresented: $player.show) {
+            CymusicPlayerView()
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -40,13 +42,11 @@ struct RootView: View {
             NavigationView { SearchView() }
                 .navigationViewStyle(StackNavigationViewStyle())
         } else if tab == 2 {
-            if auth.ent.canPlayMusic {
-                PlayerView(onClose: { tab = 0 })
+            if auth.ent.canUseVideo {
+                EyesView()
             } else {
-                PaywallView(need: "VIP", feature: "在线听歌")
+                PaywallView(need: "SVIP", feature: "养眼视频", onClose: { tab = 0 })
             }
-        } else if tab == 3 {
-            if auth.ent.canUseVideo { EyesView() } else { PaywallView(need: "SVIP", feature: "养眼视频") }
         } else {
             MineView()
         }
@@ -60,18 +60,17 @@ struct TabBarView: View {
         HStack(spacing: 0) {
             cell(IsleSymbol.home, "首页", 0)
             cell(IsleSymbol.search, "搜索", 1)
-            playButton
-            cell(IsleSymbol.video, "养眼", 3)
-            cell(IsleSymbol.me, "我的", 4)
+            cell(IsleSymbol.video, "养眼", 2)
+            cell(IsleSymbol.me, "我的", 3)
         }
         .padding(.horizontal, 4)
-        .frame(height: 62)
+        .frame(height: 58)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color(red: 0.07, green: 0.03, blue: 0.06).opacity(0.94))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
         .padding(.horizontal, 14)
@@ -81,30 +80,17 @@ struct TabBarView: View {
 
     private func cell(_ symbol: String, _ title: String, _ index: Int) -> some View {
         Button { tab = index } label: {
-            VStack(spacing: 4) {
-                IsleIcon(symbol, scale: .lg,
+            VStack(spacing: 3) {
+                IsleIcon(symbol,
+                         scale: .lg,
+                         weight: tab == index ? .semibold : .medium,
                          tint: tab == index ? IsleColor.pinkLight : Color.white.opacity(0.38))
                 Text(title)
-                    .font(.system(size: 9.5))
+                    .font(.system(size: 9))
                     .foregroundStyle(tab == index ? IsleColor.pinkLight : Color.white.opacity(0.38))
             }
-            .padding(.top, 14)
+            .padding(.top, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var playButton: some View {
-        Button { tab = 2 } label: {
-            ZStack {
-                Circle()
-                    .fill(IsleColor.accent)
-                    .frame(width: 46, height: 46)
-                    .shadow(color: IsleColor.pinkDeep.opacity(0.48), radius: 11, y: 8)
-                IsleIcon(tab == 2 ? IsleSymbol.pause : IsleSymbol.play,
-                         scale: .md, weight: .bold, tint: Color.white)
-            }
-            .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
     }
@@ -137,8 +123,8 @@ struct MineView: View {
 
     private var nickname: String { auth.user?.nickname ?? "未登录" }
     private var uid: String {
-        let base = abs(nickname.hashValue) % 900000
-        return String(base + 100000)
+        guard let id = auth.user?.id else { return "------" }
+        return String(format: "%06d", id)
     }
 
     var body: some View {
@@ -417,9 +403,9 @@ struct MineSectionRow: View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
                         .fill(tint.opacity(0.14))
-                        .frame(width: 32, height: 32)
+                        .frame(width: 30, height: 30)
                     IsleIcon(icon, scale: .sm, tint: tint)
                 }
 
