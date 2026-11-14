@@ -1,0 +1,39 @@
+name: isle-fix5
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Unify domain
+        run: python3 scripts/isle_patch6.py
+
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add -A
+          git commit -m 'chore(domain): 客户端音源统一走 ys.irepo.cn，服务端补 /api/wxmusic 转发与文档域名'
+          git push origin HEAD:'猫巷。'
+
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'
+
+      - name: Trigger pack-server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pack-server.yml --ref '猫巷。'
