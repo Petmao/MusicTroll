@@ -30,6 +30,9 @@ final class MusicEngine: ObservableObject {
     @Published var shuffleOn = false
     @Published var volume: Float = 1.0
 
+    /// 由 AuthStore 注入：返回 false 时一律不取地址、不出声
+    var gate: (() -> Bool)?
+
     private var endObs: NSObjectProtocol?
     private var endGuard = false
 
@@ -73,6 +76,7 @@ final class MusicEngine: ObservableObject {
     func search(_ keyword: String) async throws -> [[String: Any]] {
         let kw = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !kw.isEmpty else { throw EngineError.noResult }
+
         var last: Error = EngineError.timeout
         for i in 0..<2 {
             do { return try await requestOnce(kw) }
@@ -81,6 +85,19 @@ final class MusicEngine: ObservableObject {
                 if i == 0 { try? await Task.sleep(nanoseconds: 700_000_000) }
             }
         }
+
+        // 歌单里存的是 “歌名 - 歌手”，整串搜不到时退化成只搜歌名
+        let short = kw.components(separatedBy: " - ").first ?? kw
+        if short != kw, !short.isEmpty {
+            for i in 0..<2 {
+                do { return try await requestOnce(short) }
+                catch {
+                    last = error
+                    if i == 0 { try? await Task.sleep(nanoseconds: 500_000_000) }
+                }
+            }
+        }
+
         throw last
     }
 
@@ -178,6 +195,7 @@ final class MusicEngine: ObservableObject {
     }
 
     func playItem(_ item: [String: Any], keyword: String) async throws {
+        if let gate, !gate() { halt(); return }
         endGuard = false
         let title = (item["title"] as? String) ?? keyword
         let artist = (item["artist"] as? String) ?? "未知歌手"
@@ -351,6 +369,15 @@ final class MusicEngine: ObservableObject {
         if wasPlaying { p.play(); isPlaying = true }
     }
 
+    /// 立刻停声并清空播放态，用于降级、到期、未授权
+    func halt() {
+        player?.pause()
+        AudioFX.shared.pause()
+        isPlaying = false
+        progress = 0
+        status = "需要 VIP"
+    }
+
     func setVolume(_ v: Float) {
         let clamped = max(0, min(1, v))
         volume = clamped
@@ -398,6 +425,13 @@ final class MusicEngine: ObservableObject {
 
     func loadQueueItem(present: Bool) async {
         guard queueIndex >= 0, queueIndex < queue.count else { return }
+
+        // 权限门禁：非 VIP 连地址都不去取，更不会出声
+        if let gate, !gate() {
+            halt()
+            return
+        }
+
         let kw = queue[queueIndex]
         status = "搜索中…"
         do {

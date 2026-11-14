@@ -34,6 +34,9 @@ struct RootView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onChange(of: auth.isVIP) { vip in
+            if !vip { MusicEngine.shared.halt() }
+        }
         .fullScreenCover(isPresented: $player.show) {
             if auth.isVIP {
                 CymusicPlayerView()

@@ -403,6 +403,7 @@ struct PlaylistDetailView: View {
 
                             ForEach(Array(playlist.songs.enumerated()), id: \.offset) { i, s in
                                 Button {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     Task { await engine.playQueue(playlist.songs, startAt: i) }
                                 } label: {
                                     HStack(spacing: 10) {
@@ -410,15 +411,23 @@ struct PlaylistDetailView: View {
                                             .font(.system(size: 11, weight: .bold))
                                             .foregroundStyle(Color.white.opacity(0.3))
                                             .frame(width: 22)
+
+                                        IsleIcon(IsleSymbol.play, scale: .xs,
+                                                 tint: Color.white.opacity(0.55))
+                                            .frame(width: 16)
+
                                         Text(s)
                                             .font(.system(size: 13))
                                             .foregroundStyle(Color.white)
                                             .lineLimit(1)
+
                                         Spacer(minLength: 0)
+
                                         if engine.current?.title == s {
                                             IsleIcon("waveform", scale: .sm, tint: IsleColor.pinkLight)
                                         }
                                     }
+                                    .contentShape(Rectangle())
                                     .padding(12)
                                     .background(IsleColor.surface)
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))

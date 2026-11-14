@@ -8,6 +8,14 @@ final class AuthStore: ObservableObject {
     @Published var loading = false
     @Published var error: String?
 
+    init() {
+        // 引擎侧的权限门禁：非 VIP 时连播放地址都不取
+        MusicEngine.shared.gate = { [weak self] in
+            guard let self else { return false }
+            return self.isVIP
+        }
+    }
+
     var isLoggedIn: Bool { user != nil }
 
     /// 本地再判一次到期，避免 App 长时间挂着不刷新权限
