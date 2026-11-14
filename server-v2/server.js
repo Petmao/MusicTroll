@@ -468,13 +468,44 @@ function buildSourceUrl(src, kw) {
   return url.toString();
 }
 
+// 搜索缓存：同关键词 60 秒内直接复用，避免每次全打一遍
+const SEARCH_TTL_MS = 60 * 1000;
+const SEARCH_CACHE_MAX = 120;
+const SEARCH_BUDGET_MS = 7000;
+const searchCache = new Map();
+
+function searchCacheGet(key) {
+  const hit = searchCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.t > SEARCH_TTL_MS) {
+    searchCache.delete(key);
+    return null;
+  }
+  return hit.data;
+}
+
+function searchCachePut(key, data) {
+  searchCache.set(key, { t: Date.now(), data });
+  while (searchCache.size > SEARCH_CACHE_MAX) {
+    const oldest = searchCache.keys().next().value;
+    searchCache.delete(oldest);
+  }
+}
+
 // 多源聚合：所有启用的音乐源并发请求，结果合并去重
 app.get('/api/search', limit('search', 60, 60000), async (req, res) => {
   const kw = String(req.query.kw || req.query.keyword || '').trim();
   if (!kw) return res.status(400).json({ error: 'bad_keyword' });
 
+  const cached = searchCacheGet(kw);
+  if (cached) return res.json(cached);
+
   const rows = db.prepare("SELECT * FROM sources WHERE kind='music' AND enabled=1 ORDER BY sort ASC, id ASC").all();
-  if (!rows.length) return res.json({ keyword: kw, count: 0, sources: [], rows: [] });
+  if (!rows.length) {
+    const empty = { keyword: kw, count: 0, sources: [], rows: [] };
+    searchCachePut(kw, empty);
+    return res.json(empty);
+  }
 
   const tasks = rows.map(async (src) => {
     const h = src.headers ? safeJson(src.headers) : {};
@@ -493,12 +524,12 @@ app.get('/api/search', limit('search', 60, 60000), async (req, res) => {
         method: 'POST',
         headers: Object.assign({ 'Content-Type': 'application/json' }, h || {}),
         body: JSON.stringify(bodyObj),
-        timeout: 15000
+        timeout: 6000
       });
     } else {
       let target;
       try { target = buildSourceUrl(src, kw); } catch (_) { return { name: src.name, status: 0, ms: 0, items: [] }; }
-      r = await fetchJson(target, { headers: h || {}, timeout: 15000 });
+      r = await fetchJson(target, { headers: h || {}, timeout: 6000 });
     }
     const out = [];
     if (r.json) deepCollect(r.json, out, 0);
@@ -507,7 +538,25 @@ app.get('/api/search', limit('search', 60, 60000), async (req, res) => {
     return { name: src.name, status: r.status, ms: r.ms, items: out };
   });
 
-  const per = await Promise.all(tasks);
+  // 总预算 7 秒：慢的源直接丢掉，先把拿到的结果返回，不让用户等满 6 秒×N
+  const per = [];
+  await new Promise((resolve) => {
+    let done = 0;
+    const timer = setTimeout(resolve, SEARCH_BUDGET_MS);
+    tasks.forEach((task) => {
+      task
+        .then((r) => { per.push(r); })
+        .catch(() => {})
+        .finally(() => {
+          done += 1;
+          if (done === tasks.length) {
+            clearTimeout(timer);
+            resolve();
+          }
+        });
+    });
+  });
+
   const seen = new Set();
   const merged = [];
   for (const r of per) {
@@ -520,12 +569,14 @@ app.get('/api/search', limit('search', 60, 60000), async (req, res) => {
   }
 
   audit(null, 'search', kw + '/' + merged.length, req.ip);
-  res.json({
+  const payload = {
     keyword: kw,
     count: merged.length,
     sources: per.map(r => ({ name: r.name, status: r.status, ms: r.ms, got: r.items.length })),
     rows: merged
-  });
+  };
+  if (merged.length) searchCachePut(kw, payload);
+  res.json(payload);
 });
 
 // ---------------- 视频：从后台配的视频源里抽出可播地址 ----------------
