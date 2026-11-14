@@ -1,0 +1,45 @@
+name: isle-fix8
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch search aggregation
+        run: python3 scripts/isle_patch11.py
+
+      - name: Verify
+        run: |
+          grep -n 'buildSourceUrl' server-v2/server.js
+          grep -n 'requestAggregated' Isle/Sources/MusicEngine.swift
+
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add server-v2/server.js Isle/Sources/MusicEngine.swift
+          git diff --cached --stat
+          git commit -m 'feat(search): 服务端多源聚合并去重，客户端改走 /api/search，后台音乐源真正生效'
+          git push origin HEAD:'猫巷。'
+
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'
+
+      - name: Trigger pack-server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pack-server.yml --ref '猫巷。'

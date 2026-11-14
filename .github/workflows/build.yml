@@ -22,7 +22,7 @@ jobs:
         run: brew install ldid || true
 
       - name: Build unsigned ipa + tipa
-        run: VERSION=1.12.2 bash build.sh both
+        run: VERSION=1.12.3 bash build.sh both
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
@@ -41,10 +41,12 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.12.2
-          name: 屿声音乐 v1.12.2（图形预热挪出 App.init）
+          tag_name: v1.12.3
+          name: 屿声音乐 v1.12.3（多源聚合搜索 + 歌单新建）
           body: |
-            - 修 v1.12.1 启动即闪退：MTLCreateSystemDefaultDevice 不能在 App.init 调用
-            - LinkFix 拆成 load() 只 dlopen、warmUp() 在 View.task 里延后一帧预热图形栈
-            - 版本号 1.12.2，装完在关于页确认
+            - 服务端 /api/search 读 sources 表，多源并发 + 归一化 + 去重，后台加的音乐源真正生效
+            - 客户端搜索改走 /api/search，v1 上游仅作兜底
+            - 歌单新建从 alert.TextField 改成独立 sheet，iOS 15 可正常输入
+            - 歌单详情支持播放全部与单曲点播
+            - 版本号 1.12.3
           files: Isle.tipa
