@@ -1,0 +1,38 @@
+name: isle-fix10
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch buildSourceUrl
+        run: python3 scripts/isle_patch13.py
+
+      - name: Verify
+        run: grep -n 'encodeURIComponent(kw)' server-v2/server.js
+
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add server-v2/server.js
+          git diff --cached --stat
+          git commit -m 'fix(search): 地址栏内联的 {kw} 占位符也替换，修 Meting 一类 ?id={kw} 源不生效'
+          git push origin HEAD:'猫巷。'
+
+      - name: Trigger pack-server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pack-server.yml --ref '猫巷。'
