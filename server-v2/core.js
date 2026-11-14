@@ -155,7 +155,28 @@ CREATE TABLE IF NOT EXISTS audit (
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_points_user ON points(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ent_user ON entitlements(user_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS cloud_playlists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  pid TEXT NOT NULL,
+  name TEXT NOT NULL,
+  songs TEXT NOT NULL DEFAULT '[]',
+  cover TEXT,
+  rev INTEGER NOT NULL DEFAULT 1,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(user_id, pid)
+);
+CREATE TABLE IF NOT EXISTS progress (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  track_key TEXT NOT NULL,
+  position_ms INTEGER NOT NULL DEFAULT 0,
+  duration_ms INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(user_id, track_key)
+);
 CREATE INDEX IF NOT EXISTS idx_sources_kind ON sources(kind, enabled, sort);
+CREATE INDEX IF NOT EXISTS idx_cloud_user ON cloud_playlists(user_id, updated_at DESC);
 `);
 
 const now = () => Math.floor(Date.now() / 1000);

@@ -19,7 +19,6 @@ struct SettingsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 10) {
                     banner
-                    if isAdmin { sourcesCard }
                     appearanceCard
                     audioCard
                     cacheCard
@@ -35,7 +34,6 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             refreshCache()
-            if isAdmin { await loadSources() }
         }
         .alert("退出登录", isPresented: $showLogout) {
             Button("取消", role: .cancel) {}
@@ -82,24 +80,6 @@ struct SettingsView: View {
             .tracking(1)
             .foregroundStyle(Color.white.opacity(0.5))
             .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var sourcesCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionLabel("账号与设备")
-                .padding(.bottom, 6)
-
-            NavigationLink(destination: DeviceView()) {
-                navRow("设备管理", "查看已绑定设备 / 解绑")
-            }
-            Divider().background(Color.white.opacity(0.06))
-            navRow("音乐与视频源", "由后台 admin.html 统一配置")
-        }
-        .padding(14)
-        .background(IsleColor.surface)
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .stroke(IsleColor.gold.opacity(0.18), lineWidth: 0.8))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private func navRow(_ title: String, _ sub: String) -> some View {

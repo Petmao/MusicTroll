@@ -4,6 +4,8 @@ struct IslePlaylist: Identifiable, Codable, Equatable {
     var id = UUID()
     var name: String
     var songs: [String] = []
+    /// 本地封面文件名，存在 Documents/covers 下
+    var cover: String? = nil
 }
 
 final class PlaylistStore: ObservableObject {
@@ -39,6 +41,23 @@ final class PlaylistStore: ObservableObject {
         save()
     }
 
+    func coverURL(_ p: IslePlaylist) -> URL? {
+        guard let c = p.cover, !c.isEmpty else { return nil }
+        let u = URL.documents.appendingPathComponent("covers", isDirectory: true)
+            .appendingPathComponent(c)
+        return FileManager.default.fileExists(atPath: u.path) ? u : nil
+    }
+
+    func setCover(_ data: Data, for id: UUID) {
+        let dir = URL.documents.appendingPathComponent("covers", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let name = id.uuidString + ".jpg"
+        try? data.write(to: dir.appendingPathComponent(name))
+        guard let i = lists.firstIndex(where: { $0.id == id }) else { return }
+        lists[i].cover = name
+        save()
+    }
+
     /// 「我喜欢的音乐」歌单 id，没有就建一个
     func favoritePlaylistID() -> UUID {
         if let p = lists.first(where: { $0.name == "我喜欢的音乐" }) { return p.id }
@@ -61,6 +80,8 @@ struct LibraryView: View {
     @State private var tab = 0
     @State private var showNew = false
     @State private var openList: IslePlaylist?
+    @State private var coverTarget: UUID?
+    @State private var showCoverPicker = false
 
     private let tabs = ["收藏", "歌单", "本地"]
     private let covers: [LinearGradient] = [
@@ -84,6 +105,11 @@ struct LibraryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showNew) {
             NewPlaylistSheet { name in store.add(name) }
+        }
+        .sheet(isPresented: $showCoverPicker) {
+            PhotoPicker { data in
+                if let id = coverTarget { store.setCover(data, for: id) }
+            }
         }
         .sheet(item: $openList) { p in
             PlaylistDetailView(playlist: p)
@@ -178,22 +204,51 @@ struct LibraryView: View {
                     ForEach(Array(store.lists.enumerated()), id: \.element.id) { i, p in
                         Button { openList = p } label: {
                             VStack(alignment: .leading, spacing: 7) {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(covers[i % covers.count])
-                                    .frame(height: 100)
-                                    .overlay(
-                                        Text("\(p.songs.count) 首")
-                                            .font(.system(size: 9.5, weight: .bold))
-                                            .padding(.horizontal, 7).padding(.vertical, 3)
-                                            .background(Capsule().fill(Color.black.opacity(0.35))),
-                                        alignment: .bottomTrailing
-                                    )
+                                ZStack {
+                                    if let u = store.coverURL(p), let img = UIImage(contentsOfFile: u.path) {
+                                        Image(uiImage: img)
+                                            .resizable()
+                                            .scaledToFill()
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .fill(covers[i % covers.count])
+                                    }
+                                }
+                                .frame(height: 100)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .overlay(
+                                    Text("\(p.songs.count) 首")
+                                        .font(.system(size: 9.5, weight: .bold))
+                                        .padding(.horizontal, 7).padding(.vertical, 3)
+                                        .background(Capsule().fill(Color.black.opacity(0.35)))
+                                        .padding(6),
+                                    alignment: .bottomTrailing
+                                )
+
                                 Text(p.name)
                                     .font(.system(size: 12, weight: .bold))
                                     .lineLimit(1)
                             }
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                coverTarget = p.id
+                                showCoverPicker = true
+                            } label: {
+                                Label("更换封面", systemImage: "photo")
+                            }
+                            if p.cover != nil {
+                                Button(role: .destructive) {
+                                    coverTarget = p.id
+                                    if let idx = store.lists.firstIndex(where: { $0.id == p.id }) {
+                                        store.lists[idx].cover = nil
+                                    }
+                                } label: {
+                                    Label("恢复默认封面", systemImage: "arrow.counterclockwise")
+                                }
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 14)

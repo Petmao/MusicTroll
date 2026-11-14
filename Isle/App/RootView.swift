@@ -191,19 +191,67 @@ struct MineHeader: View {
     let points: Int
     let loaded: Bool
 
+    @EnvironmentObject private var auth: AuthStore
+    @State private var showPicker = false
+
+    private var avatarURL: URL? {
+        guard let a = auth.user?.avatar, !a.isEmpty else { return nil }
+        if a.hasPrefix("http") { return URL(string: a) }
+        return URL(string: a, relativeTo: APIClient.shared.baseURL)?.absoluteURL
+    }
+
     var body: some View {
         HStack(spacing: 13) {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient(colors: [IsleColor.pink, IsleColor.pinkDeep],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 58, height: 58)
-                Circle()
-                    .strokeBorder(IsleColor.pink.opacity(0.6), lineWidth: 2)
-                    .frame(width: 58, height: 58)
-                Text(String(nickname.prefix(1)))
-                    .font(.system(size: 22, weight: .heavy))
-                    .foregroundStyle(Color.white)
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                showPicker = true
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [IsleColor.pink, IsleColor.pinkDeep],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 58, height: 58)
+
+                    if let u = avatarURL {
+                        AsyncImage(url: u) { phase in
+                            if case .success(let img) = phase {
+                                img.resizable().scaledToFill()
+                            } else {
+                                Color.clear
+                            }
+                        }
+                        .frame(width: 58, height: 58)
+                        .clipShape(Circle())
+                    } else {
+                        Text(String(nickname.prefix(1)))
+                            .font(.system(size: 22, weight: .heavy))
+                            .foregroundStyle(Color.white)
+                    }
+
+                    Circle()
+                        .strokeBorder(IsleColor.pink.opacity(0.6), lineWidth: 2)
+                        .frame(width: 58, height: 58)
+                }
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showPicker) {
+                PhotoPicker { data in
+                    Task { await auth.uploadAvatar(data) }
+                }
+            }
+            .contextMenu {
+                Button {
+                    showPicker = true
+                } label: {
+                    Label("更换头像", systemImage: "photo")
+                }
+                if auth.user?.avatar != nil {
+                    Button(role: .destructive) {
+                        Task { await auth.resetAvatar() }
+                    } label: {
+                        Label("恢复默认头像", systemImage: "arrow.counterclockwise")
+                    }
+                }
             }
 
             VStack(alignment: .leading, spacing: 4) {
