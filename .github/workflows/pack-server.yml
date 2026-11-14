@@ -1,0 +1,41 @@
+name: pack-server
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 1
+
+      - name: Pack server-v2
+        run: |
+          ls -la server-v2
+          cd server-v2
+          zip -r ../isle-server-v2.zip . -x 'data/*' -x 'node_modules/*' -x '*.log'
+          cd ..
+          ls -lh isle-server-v2.zip
+          shasum -a 256 isle-server-v2.zip
+          unzip -l isle-server-v2.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: isle-server-v2
+          path: isle-server-v2.zip
+          if-no-files-found: error
+
+      - name: Summary
+        run: |
+          echo '### isle-server-v2.zip' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh isle-server-v2.zip >> $GITHUB_STEP_SUMMARY
+          shasum -a 256 isle-server-v2.zip >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

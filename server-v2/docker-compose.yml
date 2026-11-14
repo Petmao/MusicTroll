@@ -1,0 +1,32 @@
+services:
+  isle:
+    build: .
+    image: isle-server:2.0.0
+    container_name: isle-server
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8787"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8787/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # 可选：Casdoor 身份服务。不用就把这段删掉，CASDOOR_ENABLED 保持 0。
+  # 需要 MySQL，默认连宿主机的 mysql，自己改 DSN。
+  # casdoor:
+  #   image: casbin/casdoor:latest
+  #   container_name: casdoor
+  #   restart: unless-stopped
+  #   ports:
+  #     - "127.0.0.1:8000:8000"
+  #   environment:
+  #     - driverName=mysql
+  #     - dataSourceName=root:pass@tcp(host.docker.internal:3306)/casdoor
+  #   volumes:
+  #     - ./casdoor/conf:/conf
+  #     - ./casdoor/logs:/logs

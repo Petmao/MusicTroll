@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang='zh-CN'>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>屿声 · 后台</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#08070c;color:#fff;font:14px/1.6 -apple-system,'PingFang SC',sans-serif}
+a{color:#ff8fb8;text-decoration:none}
+input,select,textarea,button{font:inherit;color:inherit}
+input,select,textarea{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:9px 11px;width:100%;outline:none}
+input:focus,textarea:focus{border-color:#ff5f9e}
+button{background:linear-gradient(90deg,#ff5f9e,#ff8a4b);border:0;border-radius:9px;padding:9px 16px;font-weight:700;cursor:pointer}
+button.ghost{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}
+button.danger{background:rgba(255,80,110,.18);border:1px solid rgba(255,80,110,.4);color:#ff7d94}
+#login{max-width:360px;margin:14vh auto;padding:26px;background:#12101a;border:1px solid rgba(255,255,255,.08);border-radius:18px}
+#login h1{font-size:20px;margin-bottom:4px}
+#login p{font-size:12px;color:rgba(255,255,255,.4);margin-bottom:18px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;color:rgba(255,255,255,.45);margin-bottom:5px}
+#main{display:flex;min-height:100vh}
+aside{width:190px;flex:none;background:#0d0b12;border-right:1px solid rgba(255,255,255,.07);padding:18px 12px}
+aside h2{font-size:13px;letter-spacing:1px;color:#ff8fb8;margin-bottom:16px;padding-left:8px}
+aside a{display:block;padding:9px 12px;border-radius:9px;color:rgba(255,255,255,.65);font-size:13px;margin-bottom:4px}
+aside a.on,aside a:hover{background:rgba(255,95,158,.14);color:#fff}
+section{flex:1;padding:22px 26px;max-width:1180px}
+h3{font-size:16px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+h3 span{font-size:11px;color:rgba(255,255,255,.35);font-weight:400}
+.card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px;margin-bottom:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row > *{flex:1;min-width:130px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px}
+.stat b{display:block;font-size:22px;color:#ff8fb8}
+.stat span{font-size:11px;color:rgba(255,255,255,.4)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.06)}
+th{color:rgba(255,255,255,.4);font-weight:600;font-size:11px}
+.tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:6px;background:rgba(255,95,158,.16);color:#ff8fb8}
+.tag.ok{background:rgba(67,224,208,.14);color:#43e0d0}
+.tag.bad{background:rgba(255,80,110,.16);color:#ff7d94}
+pre{background:#000;padding:12px;border-radius:10px;overflow:auto;font-size:11.5px;line-height:1.7;max-height:220px}
+.mono{font-family:ui-monospace,Menlo,monospace}
+.hint{font-size:11px;color:rgba(255,255,255,.35);margin-top:6px}
+</style>
+</head>
+<body>
+
+<div id='login'>
+  <h1>屿声后台</h1>
+  <p>Isle Server v2</p>
+  <div class='field'><label>账号</label><input id='acc' value='admin'></div>
+  <div class='field'><label>密码</label><input id='pwd' type='password'></div>
+  <button onclick='doLogin()' style='width:100%'>登录</button>
+  <div class='hint' id='loginTip'></div>
+</div>
+
+<div id='main' hidden>
+  <aside>
+    <h2>ISLE ADMIN</h2>
+    <a data-v='dash' class='on' onclick='go("dash")'>概览</a>
+    <a data-v='music' onclick='go("music")'>音乐源</a>
+    <a data-v='video' onclick='go("video")'>视频源</a>
+    <a data-v='codes' onclick='go("codes")'>卡密</a>
+    <a data-v='users' onclick='go("users")'>用户</a>
+    <a data-v='orders' onclick='go("orders")'>订单</a>
+    <a data-v='keys' onclick='go("keys")'>开放 API</a>
+    <a data-v='audit' onclick='go("audit")'>审计日志</a>
+    <a onclick='logout()' style='margin-top:20px;color:#ff7d94'>退出</a>
+  </aside>
+  <section id='view'></section>
+</div>
+
+<script>
+var T = localStorage.getItem('isle_admin') || '';
+var SRC = [];
+
+function api(p, opt) {
+  opt = opt || {};
+  opt.headers = Object.assign({ 'Content-Type': 'application/json', Authorization: 'Bearer ' + T }, opt.headers || {});
+  if (opt.body && typeof opt.body !== 'string') opt.body = JSON.stringify(opt.body);
+  return fetch(p, opt).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      return j;
+    });
+  });
+}
+
+function doLogin() {
+  var acc = document.getElementById('acc').value;
+  var pwd = document.getElementById('pwd').value;
+  fetch('/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account: acc, password: pwd })
+  }).then(function (r) { return r.json(); }).then(function (j) {
+    if (j.token) { T = j.token; localStorage.setItem('isle_admin', T); boot(); }
+    else document.getElementById('loginTip').textContent = '账号或密码不对';
+  });
+}
+
+function logout() { T = ''; localStorage.removeItem('isle_admin'); location.reload(); }
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>\"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' })[c]; }); }
+
+function boot() {
+  document.getElementById('login').hidden = true;
+  document.getElementById('main').hidden = false;
+  go('dash');
+}
+
+function go(v) {
+  Array.prototype.forEach.call(document.querySelectorAll('aside a[data-v]'), function (a) {
+    a.classList.toggle('on', a.dataset.v === v);
+  });
+  if (v === 'dash') dash();
+  if (v === 'music') sources('music');
+  if (v === 'video') sources('video');
+  if (v === 'codes') codes();
+  if (v === 'users') users();
+  if (v === 'orders') orders();
+  if (v === 'keys') keys();
+  if (v === 'audit') auditView();
+}
+
+function dash() {
+  api('/api/admin/stats').then(function (s) {
+    var h = '<h3>概览 <span>Isle Server v2</span></h3><div class="grid">';
+    h += '<div class="stat"><b>' + s.users + '</b><span>用户</span></div>';
+    h += '<div class="stat"><b>' + s.codesUnused + '</b><span>未用卡密</span></div>';
+    h += '<div class="stat"><b>' + s.orders + '</b><span>订单</span></div>';
+    h += '<div class="stat"><b>' + (s.revenueCents / 100).toFixed(2) + '</b><span>收入 (CNY)</span></div>';
+    h += '<div class="stat"><b>' + s.devices + '</b><span>在线设备</span></div>';
+    h += '<div class="stat"><b>' + s.sources + '</b><span>启用源</span></div>';
+    h += '</div>';
+    h += '<div class="card" style="margin-top:16px"><b>Casdoor：</b>' + (s.casdoor ? '<span class="tag ok">已开启</span>' : '<span class="tag">未开启（本地账号）</span>') + '</div>';
+    h += '<div class="card"><b>角色分布</b><pre>' + esc(JSON.stringify(s.byRole, null, 2)) + '</pre></div>';
+    document.getElementById('view').innerHTML = h;
+  }).catch(showErr);
+}
+
+function showErr(e) { document.getElementById('view').innerHTML = '<div class="card"><span class="tag bad">' + esc(e.message) + '</span></div>'; }
+
+function sources(kind) {
+  api('/api/admin/sources').then(function (r) {
+    SRC = r.rows.filter(function (x) { return x.kind === kind; });
+    var h = '<h3>' + (kind === 'music' ? '音乐源' : '视频源') + ' <span>按 sort 升序并发请求，先到先出</span></h3>';
+    h += '<div class="card"><div class="row">';
+    h += '<div><label>名称</label><input id="s_name" placeholder="网易云直连"></div>';
+    h += '<div><label>地址（含 {kw} 占位）</label><input id="s_url" placeholder="https://api.example.com/search?keyword={kw}"></div>';
+    h += '<div style="max-width:110px"><label>方法</label><select id="s_method"><option>GET</option><option>POST</option></select></div>';
+    h += '<div style="max-width:150px"><label>结果路径</label><input id="s_path" placeholder="data.list"></div>';
+    h += '<div style="max-width:110px"><label>排序</label><input id="s_sort" type="number" value="0"></div>';
+    h += '</div><div class="row" style="margin-top:10px">';
+    h += '<div><label>额外参数 JSON</label><input id="s_params" placeholder=\'{"limit":20}\'></div>';
+    h += '<div><label>请求头 JSON</label><input id="s_headers" placeholder=\'{"Referer":"https://music.163.com/"}\'></div>';
+    h += '<div style="max-width:110px"><button onclick=\'addSrc("' + kind + '")\'>添加</button></div>';
+    h += '</div></div>';
+    h += '<div class="card"><table><tr><th>ID</th><th>名称</th><th>地址</th><th>状态</th><th>耗时</th><th>启用</th><th>操作</th></tr>';
+    SRC.forEach(function (s) {
+      var st = s.lastStatus ? (s.lastStatus >= 200 && s.lastStatus < 400 ? '<span class="tag ok">' + s.lastStatus + '</span>' : '<span class="tag bad">' + s.lastStatus + '</span>') : '<span class="tag">未测</span>';
+      h += '<tr><td>' + s.id + '</td><td>' + esc(s.name) + '</td><td class="mono" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(s.url) + '</td>';
+      h += '<td>' + st + '</td><td>' + (s.lastMs || '-') + 'ms</td><td>' + (s.enabled ? '是' : '否') + '</td>';
+      h += '<td><button class="ghost" onclick="testSrc(' + s.id + ')">测试</button> <button class="ghost" onclick="toggleSrc(' + s.id + ',' + (s.enabled ? 0 : 1) + ')">' + (s.enabled ? '停用' : '启用') + '</button> <button class="danger" onclick="delSrc(' + s.id + ')">删</button></td></tr>';
+    });
+    h += '</table></div>';
+    document.getElementById('view').innerHTML = h;
+  }).catch(showErr);
+}
+
+function addSrc(kind) {
+  var body = {
+    kind: kind,
+    name: document.getElementById('s_name').value,
+    url: document.getElementById('s_url').value,
+    method: document.getElementById('s_method').value,
+    resultPath: document.getElementById('s_path').value || null,
+    sort: Number(document.getElementById('s_sort').value || 0),
+    params: document.getElementById('s_params').value ? JSON.parse(document.getElementById('s_params').value) : null,
+    headers: document.getElementById('s_headers').value ? JSON.parse(document.getElementById('s_headers').value) : null
+  };
+  api('/api/admin/sources', { method: 'POST', body: body })
+    .then(function () { sources(kind); })
+    .catch(function (e) { alert(e.message); });
+}
+
+function testSrc(id) {
+  api('/api/admin/sources/' + id + '/test', { method: 'POST' })
+    .then(function (r) { alert('状态 ' + r.status + ' · ' + r.ms + 'ms'); go(document.querySelector('aside a.on').dataset.v); })
+    .catch(function (e) { alert(e.message); });
+}
+
+function toggleSrc(id, on) {
+  api('/api/admin/sources/' + id, { method: 'PATCH', body: { enabled: !!on } })
+    .then(function () { go(document.querySelector('aside a.on').dataset.v); })
+    .catch(function (e) { alert(e.message); });
+}
+
+function delSrc(id) {
+  if (!confirm('删除这个源？')) return;
+  api('/api/admin/sources/' + id, { method: 'DELETE' }).then(function () { go(document.querySelector('aside a.on').dataset.v); });
+}
+
+function codes() {
+  var h = '<h3>卡密 <span>兑换即开通，写 orders + entitlements</span></h3>';
+  h += '<div class="card"><div class="row">';
+  h += '<div style="max-width:120px"><label>档位</label><select id="c_role"><option value="vip">VIP</option><option value="svip">SVIP</option></select></div>';
+  h += '<div style="max-width:120px"><label>天数</label><input id="c_days" type="number" value="30"></div>';
+  h += '<div style="max-width:120px"><label>数量</label><input id="c_count" type="number" value="10"></div>';
+  h += '<div style="max-width:160px"><label>备注</label><input id="c_note"></div>';
+  h += '<div style="max-width:120px"><button onclick="genCodes()">生成</button></div>';
+  h += '</div><div id="genOut"></div></div>';
+  h += '<div class="card"><table id="codeTable"><tr><th>卡密</th><th>档位</th><th>天数</th><th>批次</th><th>状态</th></tr></table></div>';
+  document.getElementById('view').innerHTML = h;
+  api('/api/admin/codes').then(function (r) {
+    var t = document.getElementById('codeTable');
+    r.rows.forEach(function (c) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td class="mono">' + esc(c.code) + '</td><td>' + esc(c.role) + '</td><td>' + c.days + '</td><td>' + esc(c.batch) + '</td><td>' + (c.used_by ? '<span class="tag">已用</span>' : '<span class="tag ok">可用</span>') + '</td>';
+      t.appendChild(tr);
+    });
+  });
+}
+
+function genCodes() {
+  api('/api/admin/codes', {
+    method: 'POST',
+    body: {
+      role: document.getElementById('c_role').value,
+      days: Number(document.getElementById('c_days').value || 30),
+      count: Number(document.getElementById('c_count').value || 1),
+      note: document.getElementById('c_note').value
+    }
+  }).then(function (r) {
+    document.getElementById('genOut').innerHTML = '<pre>' + esc(r.codes.join('\n')) + '</pre>';
+  }).catch(function (e) { alert(e.message); });
+}
+
+function users() {
+  var h = '<h3>用户</h3><div class="card"><div class="row"><div><label>搜索账号/昵称</label><input id="uq" onkeydown="if(event.key===\'Enter\')searchUsers()"></div><div style="max-width:110px"><button onclick="searchUsers()">搜索</button></div></div></div>';
+  h += '<div class="card"><table id="userTable"><tr><th>ID</th><th>账号</th><th>昵称</th><th>角色</th><th>到期</th><th>积分</th><th>操作</th></tr></table></div>';
+  document.getElementById('view').innerHTML = h;
+  loadUsers('');
+}
+
+function searchUsers() { loadUsers(document.getElementById('uq').value); }
+
+function loadUsers(q) {
+  api('/api/admin/users?q=' + encodeURIComponent(q)).then(function (r) {
+    var t = document.getElementById('userTable');
+    t.innerHTML = '<tr><th>ID</th><th>账号</th><th>昵称</th><th>角色</th><th>到期</th><th>积分</th><th>操作</th></tr>';
+    r.rows.forEach(function (u) {
+      var exp = u.roleExpireAt ? new Date(u.roleExpireAt * 1000).toLocaleDateString() : '-';
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + u.id + '</td><td class="mono">' + esc(u.account) + '</td><td>' + esc(u.nickname) + '</td><td>' + esc(u.role) + '</td><td>' + exp + '</td><td>' + u.points + '</td>' +
+        '<td><button class="ghost" onclick="grantVip(' + u.id + ')">加VIP</button> <button class="ghost" onclick="givePoints(' + u.id + ')">加积分</button></td>';
+      t.appendChild(tr);
+    });
+  });
+}
+
+function grantVip(id) {
+  var days = prompt('天数', '30');
+  if (!days) return;
+  api('/api/admin/users/' + id, { method: 'PATCH', body: { role: 'vip', days: Number(days) } })
+    .then(function () { loadUsers(''); }).catch(function (e) { alert(e.message); });
+}
+
+function givePoints(id) {
+  var d = prompt('加多少积分（可负）', '200');
+  if (!d) return;
+  api('/api/admin/users/' + id + '/points', { method: 'POST', body: { delta: Number(d), reason: 'admin' } })
+    .then(function () { loadUsers(''); }).catch(function (e) { alert(e.message); });
+}
+
+function orders() {
+  api('/api/admin/orders').then(function (r) {
+    var h = '<h3>订单</h3><div class="card"><table><tr><th>ID</th><th>用户</th><th>类型</th><th>凭证</th><th>档位</th><th>天数</th><th>金额</th><th>状态</th><th>时间</th></tr>';
+    r.rows.forEach(function (o) {
+      h += '<tr><td>' + o.id + '</td><td>' + o.user_id + '</td><td>' + esc(o.kind) + '</td><td class="mono">' + esc(o.ref || '') + '</td><td>' + esc(o.role) + '</td><td>' + o.days + '</td><td>' + (o.amount_cents / 100).toFixed(2) + '</td><td>' + (o.status === 'paid' ? '<span class="tag ok">已付</span>' : '<span class="tag">' + esc(o.status) + '</span>') + '</td><td>' + new Date(o.created_at * 1000).toLocaleString() + '</td></tr>';
+    });
+    h += '</table></div>';
+    document.getElementById('view').innerHTML = h;
+  }).catch(showErr);
+}
+
+function keys() {
+  api('/api/admin/api-keys').then(function (r) {
+    var h = '<h3>开放 API <span>给第三方用 X-Api-Key 访问源</span></h3>';
+    h += '<div class="card"><div class="row"><div><label>名称</label><input id="k_name" placeholder="合作方 A"></div><div style="max-width:140px"><label>权限</label><input id="k_scopes" value="sources:read"></div><div style="max-width:110px"><button onclick="genKey()">生成</button></div></div><div id="keyOut"></div></div>';
+    h += '<div class="card"><table><tr><th>名称</th><th>Key</th><th>权限</th><th>最后使用</th><th>操作</th></tr>';
+    r.rows.forEach(function (k) {
+      h += '<tr><td>' + esc(k.name) + '</td><td class="mono">' + esc(k.key) + '</td><td>' + esc(k.scopes) + '</td><td>' + (k.last_used_at ? new Date(k.last_used_at * 1000).toLocaleString() : '-') + '</td><td><button class="danger" onclick="delKey(' + k.id + ')">删</button></td></tr>';
+    });
+    h += '</table></div>';
+    h += '<div class="card"><b>接口示例</b><pre>curl -H "X-Api-Key: isle_xxx" https://你的域名/open/v1/sources?kind=music\ncurl -H "X-Api-Key: isle_xxx" "https://你的域名/open/v1/search?kw=夜航星"</pre></div>';
+    document.getElementById('view').innerHTML = h;
+  }).catch(showErr);
+}
+
+function genKey() {
+  api('/api/admin/api-keys', { method: 'POST', body: { name: document.getElementById('k_name').value || 'key', scopes: document.getElementById('k_scopes').value } })
+    .then(function (r) { document.getElementById('keyOut').innerHTML = '<pre>' + esc(r.key) + '</pre>'; setTimeout(function () { keys(); }, 1200); })
+    .catch(function (e) { alert(e.message); });
+}
+
+function delKey(id) {
+  if (!confirm('删除这个 key？')) return;
+  api('/api/admin/api-keys/' + id, { method: 'DELETE' }).then(function () { keys(); });
+}
+
+function auditView() {
+  api('/api/admin/audit').then(function (r) {
+    var h = '<h3>审计日志</h3><div class="card"><table><tr><th>时间</th><th>用户</th><th>动作</th><th>详情</th><th>IP</th></tr>';
+    r.rows.forEach(function (a) {
+      h += '<tr><td>' + new Date(a.created_at * 1000).toLocaleString() + '</td><td>' + (a.user_id || '-') + '</td><td>' + esc(a.action) + '</td><td>' + esc(a.detail) + '</td><td class="mono">' + esc(a.ip) + '</td></tr>';
+    });
+    h += '</table></div>';
+    document.getElementById('view').innerHTML = h;
+  }).catch(showErr);
+}
+
+if (T) boot();
+</script>
+</body>
+</html>
