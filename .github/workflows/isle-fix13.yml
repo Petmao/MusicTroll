@@ -1,0 +1,38 @@
+name: isle-fix13
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch auto probe and seed
+        run: python3 scripts/isle_patch16.py
+      - name: Fix stray print
+        run: |
+          sed -i "s/      print('guess: ' + p);/      console.log('guess param: ' + p);/" server-v2/server.js
+          grep -n "console.log('guess param" server-v2/server.js || true
+      - name: Verify
+        run: |
+          grep -n guessKwParam server-v2/server.js
+          grep -n api/admin/sources/seed server-v2/server.js
+          grep -n seedSources server-v2/public/admin.html
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add server-v2/server.js server-v2/public/admin.html
+          git diff --cached --stat
+          git commit -m 'feat(sources): 只填名称和地址即可，服务端自动试关键词参数；一键导入内置源'
+          git push origin HEAD:'猫巷。'
+      - name: Trigger pack-server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pack-server.yml --ref '猫巷。'
