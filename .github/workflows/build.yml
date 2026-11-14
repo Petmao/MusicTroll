@@ -22,7 +22,7 @@ jobs:
         run: brew install ldid || true
 
       - name: Build unsigned ipa + tipa
-        run: VERSION=1.12.0 bash build.sh both
+        run: VERSION=1.12.1 bash build.sh both
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
@@ -41,12 +41,11 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.12.0
-          name: 屿声音乐 v1.12.0（键盘候选栏崩溃修复）
+          tag_name: v1.12.1
+          name: 屿声音乐 v1.12.1（Metal device + EAGL 常驻，修键盘候选栏崩溃）
           body: |
-            - 链接 Metal / MetalKit / CoreVideo，修 iOS 15 键盘候选栏 CIContext 走 EAGL 时 pc=0
-            - LinkFix 补 dlopen 并用 CPU CIContext 预热
-            - 取色 CIContext 改 software renderer
-            - 登录页移除 @FocusState 与零高度隐藏布局
-            - 版本号 1.12.0
+            - LinkFix 常驻持有 MTLCreateSystemDefaultDevice() 结果，CIContext 走 Metal 而非 EAGL
+            - 同时创建 EAGLContext 并 setCurrent，CI::GLContext 构造时共享既有上下文
+            - dlopen 补 libGLESv2 / libEGL
+            - 版本号 1.12.1，装完在关于页确认
           files: Isle.tipa
