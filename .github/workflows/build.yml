@@ -1,51 +1,42 @@
 name: build-ipa
-
 on:
   push:
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Show runner
         run: |
           uname -m
           xcodebuild -version
-
       - name: Install ldid
         run: brew install ldid || true
-
       - name: Build unsigned ipa + tipa
-        run: VERSION=1.12.4 bash build.sh both
-
+        run: VERSION=1.12.5 bash build.sh both
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
           name: Isle-unsigned-ipa
           path: Isle-unsigned.ipa
           if-no-files-found: error
-
       - name: Upload TrollStore tipa
         uses: actions/upload-artifact@v4
         with:
           name: Isle-tipa
           path: Isle.tipa
           if-no-files-found: warn
-
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.12.4
-          name: 屿声音乐 v1.12.4（搜索可加入歌单）
+          tag_name: v1.12.5
+          name: 屿声音乐 v1.12.5（养眼页视频接口修复）
           body: |
-            - 搜索结果每行加菜单：播放 / 加入歌单 / 加入我喜欢的音乐
-            - 新增「加入歌单」选择页，支持边新建边加入
-            - 播放器红心按钮同时写入「我喜欢的音乐」歌单
-            - 版本号 1.12.4
+            - /api/sources 补顶层 kind 与 last_status 字符串，修客户端解码失败
+            - 新增 /api/videos：从后台视频源里递归抽 http 可播地址并去重
+            - 养眼页改走 /api/videos，不再把接口地址当 mp4 播
+            - 版本号 1.12.5
           files: Isle.tipa

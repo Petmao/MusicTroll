@@ -1,0 +1,38 @@
+name: isle-fix12
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch video pipeline
+        run: python3 scripts/isle_patch15.py
+      - name: Verify
+        run: |
+          grep -n api/videos server-v2/server.js
+          grep -n VideoItem Isle/Network/APIExtras.swift
+          grep -n videos Isle/Features/EyesView.swift
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add server-v2/server.js Isle/Network/APIExtras.swift Isle/Features/EyesView.swift
+          git diff --cached --stat
+          git commit -m 'fix(video): sources 补 kind 与 last_status；新增 api/videos；养眼页改走聚合'
+          git push origin HEAD:'猫巷。'
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'
+      - name: Trigger pack-server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pack-server.yml --ref '猫巷。'
