@@ -9,8 +9,33 @@ final class AuthStore: ObservableObject {
     @Published var error: String?
 
     var isLoggedIn: Bool { user != nil }
-    var isVIP: Bool { ent.canPlayMusic }
-    var isSVIP: Bool { ent.canUseVideo }
+
+    /// 本地再判一次到期，避免 App 长时间挂着不刷新权限
+    var roleExpired: Bool {
+        guard let exp = user?.roleExpireAt, exp > 0 else { return false }
+        return Date().timeIntervalSince1970 > Double(exp)
+    }
+
+    var isVIP: Bool { ent.canPlayMusic && !roleExpired }
+    var isSVIP: Bool { ent.canUseVideo && !roleExpired }
+
+    var roleLabel: String {
+        if isSVIP { return "SVIP" }
+        if isVIP { return "VIP" }
+        return "免费"
+    }
+
+    var expireText: String {
+        guard let exp = user?.roleExpireAt, exp > 0 else {
+            return roleLabel == "免费" ? "未开通 · 兑换卡密即可开通" : "永久"
+        }
+        let d = Date(timeIntervalSince1970: Double(exp))
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        if roleExpired { return "\(f.string(from: d)) 已到期" }
+        let days = Int(max(0, d.timeIntervalSinceNow) / 86400)
+        return "\(f.string(from: d)) 到期 · 剩 \(days) 天"
+    }
 
     func bootstrap() async {
         guard Keychain.get("token") != nil else { return }

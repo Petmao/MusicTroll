@@ -80,8 +80,8 @@ struct LibraryView: View {
     @State private var tab = 0
     @State private var showNew = false
     @State private var openList: IslePlaylist?
-    @State private var coverTarget: UUID?
-    @State private var showCoverPicker = false
+    @State private var coverPick: CoverPick?
+    @State private var deleteTarget: IslePlaylist?
 
     private let tabs = ["收藏", "歌单", "本地"]
     private let covers: [LinearGradient] = [
@@ -92,6 +92,8 @@ struct LibraryView: View {
         LinearGradient(colors: [Color(red: 1, green: 0.82, blue: 0.25), Color(red: 1, green: 0.42, blue: 0)],
                        startPoint: .topLeading, endPoint: .bottomTrailing)
     ]
+
+    struct CoverPick: Identifiable { let id: UUID }
 
     var body: some View {
         ZStack {
@@ -106,10 +108,23 @@ struct LibraryView: View {
         .sheet(isPresented: $showNew) {
             NewPlaylistSheet { name in store.add(name) }
         }
-        .sheet(isPresented: $showCoverPicker) {
-            PhotoPicker { data in
-                if let id = coverTarget { store.setCover(data, for: id) }
+        .sheet(item: $coverPick) { pick in
+            PhotoPicker { data in store.setCover(data, for: pick.id) }
+        }
+        .alert("删除歌单", isPresented: Binding(
+            get: { deleteTarget != nil },
+            set: { if !$0 { deleteTarget = nil } }
+        )) {
+            Button("取消", role: .cancel) { deleteTarget = nil }
+            Button("删除", role: .destructive) {
+                if let t = deleteTarget,
+                   let i = store.lists.firstIndex(where: { $0.id == t.id }) {
+                    store.remove(at: IndexSet(integer: i))
+                }
+                deleteTarget = nil
             }
+        } message: {
+            Text("「\(deleteTarget?.name ?? "")」会被移除，歌里的收藏不受影响。")
         }
         .sheet(item: $openList) { p in
             PlaylistDetailView(playlist: p)
@@ -233,20 +248,23 @@ struct LibraryView: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Button {
-                                coverTarget = p.id
-                                showCoverPicker = true
+                                coverPick = CoverPick(id: p.id)
                             } label: {
                                 Label("更换封面", systemImage: "photo")
                             }
                             if p.cover != nil {
-                                Button(role: .destructive) {
-                                    coverTarget = p.id
+                                Button {
                                     if let idx = store.lists.firstIndex(where: { $0.id == p.id }) {
                                         store.lists[idx].cover = nil
                                     }
                                 } label: {
                                     Label("恢复默认封面", systemImage: "arrow.counterclockwise")
                                 }
+                            }
+                            Button(role: .destructive) {
+                                deleteTarget = p
+                            } label: {
+                                Label("删除歌单", systemImage: "trash")
                             }
                         }
                     }

@@ -35,7 +35,14 @@ struct RootView: View {
         }
         .preferredColorScheme(.dark)
         .fullScreenCover(isPresented: $player.show) {
-            CymusicPlayerView()
+            if auth.isVIP {
+                CymusicPlayerView()
+            } else {
+                NavigationView {
+                    PaywallView(need: "VIP", feature: "在线听歌")
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+            }
         }
     }
 
@@ -282,6 +289,8 @@ struct MineMemberCard: View {
     let nickname: String
     let onRedeem: () -> Void
 
+    @EnvironmentObject private var auth: AuthStore
+
     private let gold = Color(red: 0.94, green: 0.80, blue: 0.55)
     private let goldDeep = Color(red: 0.84, green: 0.62, blue: 0.32)
 
@@ -301,11 +310,20 @@ struct MineMemberCard: View {
                         .tracking(2)
                         .foregroundStyle(goldText)
 
-                    Text("尊享无损 · 无限下载")
-                        .font(.system(size: 18, weight: .heavy))
-                        .foregroundStyle(goldText)
+                    HStack(spacing: 6) {
+                        Text("尊享无损 · 无限下载")
+                            .font(.system(size: 18, weight: .heavy))
+                            .foregroundStyle(goldText)
 
-                    Text("未开通 · 兑换卡密即可开通")
+                        Text(auth.roleLabel)
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundStyle(Color(red: 0.23, green: 0.15, blue: 0.07))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(goldText))
+                    }
+
+                    Text(auth.isVIP || auth.isSVIP ? auth.expireText : "未开通 · 兑换卡密即可开通")
                         .font(.system(size: 10))
                         .foregroundStyle(gold.opacity(0.68))
                         .padding(.top, 2)
@@ -628,7 +646,7 @@ struct PlaylistImportView: View {
 
         store.add("\(platform.title)歌单 \(id.suffix(6))")
         ok = false
-        message = "已创建歌单（\(id)），但服务端未开通解析接口，曲目为空"
+        message = "服务端返回 0 首：歌单要设为公开，或者后台还没更新到最新版本"
     }
 
     static func extractID(_ s: String) -> String {
