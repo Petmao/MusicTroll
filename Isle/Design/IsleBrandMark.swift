@@ -1,9 +1,7 @@
 import SwiftUI
 
 struct IsleBrandMark: View {
-    @State private var flow = false
     @State private var float = false
-    @State private var flick = false
 
     private let pink = Color(red: 1.000, green: 0.373, blue: 0.620)
     private let lilac = Color(red: 0.769, green: 0.651, blue: 1.000)
@@ -53,26 +51,22 @@ struct IsleBrandMark: View {
                 .padding(.top, 10)
         }
         .frame(maxWidth: .infinity)
-        .onAppear { flow = true; float = true; flick = true }
+        .onAppear { float = true }
     }
 
+    /// 静态渐变标题。
+    /// 原来的 GeometryReader + Text mask + repeatForever 扫光会让这一层
+    /// 永远处于离屏重绘状态，键盘弹出触发重排时叠加 Text mask，
+    /// 主线程被拖满后进程被系统杀掉（表现为点输入框闪退）。
     private var nameText: some View {
-        let base = Text("屿声音乐")
+        Text("屿声音乐")
             .font(.system(size: 36, weight: .black))
             .tracking(2)
-
-        return base
-            .overlay {
-                GeometryReader { geo in
-                    LinearGradient(colors: rainbow, startPoint: .leading, endPoint: .trailing)
-                        .frame(width: geo.size.width * 3)
-                        .offset(x: flow ? -geo.size.width * 2 : 0)
-                        .animation(.linear(duration: 7).repeatForever(autoreverses: false), value: flow)
-                }
-                .mask(base)
-            }
-            .opacity(flick ? 1.0 : 0.45)
-            .animation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true), value: flick)
+            .foregroundStyle(
+                LinearGradient(colors: rainbow,
+                               startPoint: .leading,
+                               endPoint: .trailing)
+            )
     }
 
     private func hairline(fadeLeading: Bool) -> some View {
