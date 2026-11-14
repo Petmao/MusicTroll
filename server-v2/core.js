@@ -294,7 +294,7 @@ async function fetchJson(url, opt) {
     const text = await res.text();
     let json = null;
     try { json = JSON.parse(text); } catch (_) {}
-    return { ok: res.ok, status: res.status, json: json, text: text, ms: Date.now() - started };
+    return { ok: res.ok, status: res.status, json: json, text: text, ms: Date.now() - started, finalUrl: res.url };
   } catch (e) {
     return { ok: false, status: 0, json: null, text: String(e.message || e), ms: Date.now() - started };
   } finally {

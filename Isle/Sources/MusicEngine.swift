@@ -386,7 +386,14 @@ final class MusicEngine: ObservableObject {
         guard !titles.isEmpty else { return }
         queue = titles
         queueIndex = max(0, min(index, titles.count - 1))
-        await loadQueueItem(present: present)
+
+        // 先把播放器弹出来，UI 立刻有反应，URL 在后台慢慢取
+        if present {
+            status = "加载中…"
+            PlayerPresenter.shared.present()
+        }
+
+        await loadQueueItem(present: false)
     }
 
     func loadQueueItem(present: Bool) async {

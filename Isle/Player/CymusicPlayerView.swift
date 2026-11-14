@@ -80,7 +80,13 @@ struct CymusicPlayerView: View {
     private enum DragAxis { case undecided, horizontal, vertical }
 
     private var base: PaletteColor { palette.value(for: engine.current?.cover) }
-    private var title: String { engine.current?.title ?? "未选择歌曲" }
+    private var title: String {
+        if let t = engine.current?.title, !t.isEmpty { return t }
+        if engine.queueIndex >= 0, engine.queueIndex < engine.queue.count {
+            return engine.queue[engine.queueIndex]
+        }
+        return "未选择歌曲"
+    }
     private var artist: String { engine.current?.artist ?? "" }
     private var compact: Bool { UIScreen.main.bounds.height < 700 }
 
@@ -203,9 +209,20 @@ struct CymusicPlayerView: View {
     private var coverPlaceholder: some View {
         ZStack {
             base.color
-            Image(systemName: "music.note")
-                .font(.system(size: 46, weight: .thin))
-                .foregroundStyle(Color.white.opacity(0.16))
+            if engine.current == nil {
+                VStack(spacing: 14) {
+                    ProgressView()
+                        .tint(Color.white.opacity(0.85))
+                        .scaleEffect(1.3)
+                    Text(engine.status.isEmpty ? "加载中…" : engine.status)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.white.opacity(0.6))
+                }
+            } else {
+                Image(systemName: "music.note")
+                    .font(.system(size: 46, weight: .thin))
+                    .foregroundStyle(Color.white.opacity(0.16))
+            }
         }
     }
 
