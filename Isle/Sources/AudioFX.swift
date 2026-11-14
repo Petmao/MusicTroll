@@ -158,6 +158,11 @@ final class AudioFX {
         for band in eq.bands { band.gain = 0 }
     }
 
+    var volume: Float {
+        get { engine.mainMixerNode.outputVolume }
+        set { engine.mainMixerNode.outputVolume = max(0, min(1, newValue)) }
+    }
+
     var playbackRate: Float {
         get { pitch.rate }
         set { pitch.rate = min(2.0, max(0.5, newValue)) }

@@ -28,6 +28,7 @@ final class MusicEngine: ObservableObject {
     @Published var queueIndex: Int = -1
     @Published var repeatMode: RepeatMode = .off
     @Published var shuffleOn = false
+    @Published var volume: Float = 1.0
 
     private var endObs: NSObjectProtocol?
     private var endGuard = false
@@ -118,7 +119,11 @@ final class MusicEngine: ObservableObject {
     // MARK: - 播放
 
     func play(keyword: String) async {
-        await playQueue([keyword], startAt: 0, present: true)
+        var titles = [keyword]
+        for item in DemoData.hot where !titles.contains(item.title) {
+            titles.append(item.title)
+        }
+        await playQueue(titles, startAt: 0, present: true)
     }
 
     func playItem(_ item: [String: Any], keyword: String) async throws {
@@ -162,6 +167,9 @@ final class MusicEngine: ObservableObject {
             isPlaying = true
             status = "正在播放（本地·音效）"
             startTick()
+            if (cover ?? "").isEmpty {
+                Task { await self.fillCover(title: title, artist: artist) }
+            }
             return
         }
 
@@ -194,6 +202,7 @@ final class MusicEngine: ObservableObject {
 
         player = p
         current = MusicTrack(title: title, artist: artist, playURL: source, cover: cover)
+        p.volume = volume
         p.play()
         isPlaying = true
         status = "正在播放"
@@ -202,6 +211,9 @@ final class MusicEngine: ObservableObject {
 
         if cached == nil {
             PlaybackCache.shared.download(playURL)
+        }
+        if (cover ?? "").isEmpty {
+            Task { await self.fillCover(title: title, artist: artist) }
         }
     }
 
@@ -241,10 +253,14 @@ final class MusicEngine: ObservableObject {
         if usingFX {
             AudioFX.shared.seek(to: seconds)
             if duration > 0 { progress = min(1, max(0, seconds / duration)) }
+            if isPlaying { AudioFX.shared.play() }
             return
         }
-        player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
+        guard let p = player else { return }
+        let wasPlaying = isPlaying
+        p.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
         if duration > 0 { progress = min(1, max(0, seconds / duration)) }
+        if wasPlaying { p.play(); isPlaying = true }
     }
 
     // MARK: - 传输
@@ -273,12 +289,44 @@ final class MusicEngine: ObservableObject {
             let target = min(1, max(0, ratio))
             AudioFX.shared.seek(to: d * target)
             progress = target
+            if isPlaying { AudioFX.shared.play() }
             return
         }
 
         guard let p = player, let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 else { return }
+        let wasPlaying = isPlaying
         p.seek(to: CMTime(seconds: d * ratio, preferredTimescale: 600))
         progress = ratio
+        if wasPlaying { p.play(); isPlaying = true }
+    }
+
+    func setVolume(_ v: Float) {
+        let clamped = max(0, min(1, v))
+        volume = clamped
+        player?.volume = clamped
+        AudioFX.shared.volume = clamped
+    }
+
+    func jumpTo(_ index: Int) {
+        guard index >= 0, index < queue.count else { return }
+        queueIndex = index
+        Task { await loadQueueItem(present: false) }
+    }
+
+    func addToQueue(_ titles: [String]) {
+        for t in titles where !queue.contains(t) {
+            queue.append(t)
+        }
+        if queueIndex < 0, !queue.isEmpty { queueIndex = 0 }
+    }
+
+    private func fillCover(title: String, artist: String) async {
+        guard let url = await CoverResolver.albumArt(title: title, artist: artist) else { return }
+        guard current?.title == title else { return }
+        if var t = current {
+            t.cover = url
+            current = t
+        }
     }
 
     // MARK: - 队列 / 循环 / 随机
@@ -398,7 +446,7 @@ final class MusicEngine: ObservableObject {
                     self.duration = d
                     self.progress = min(1, max(0, t / d))
                 }
-                self.isPlaying = (p.timeControlStatus == .playing)
+                self.isPlaying = (p.rate > 0 || p.timeControlStatus == .waitingToPlayAtSpecifiedRate)
                 if self.isPlaying && self.status != "正在播放" && self.status != "正在播放（本地·音效）" {
                     self.status = "正在播放"
                 }
