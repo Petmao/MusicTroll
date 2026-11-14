@@ -16,7 +16,7 @@ jobs:
       - name: Install ldid
         run: brew install ldid || true
       - name: Build unsigned ipa + tipa
-        run: VERSION=1.12.8 bash build.sh both
+        run: VERSION=1.12.9 bash build.sh both
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
@@ -32,14 +32,14 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.12.8
-          name: 屿声音乐 v1.12.8（封面与头像自选）
+          tag_name: v1.12.9
+          name: 屿声音乐 v1.12.9（会员到期与歌单管理）
           body: |
-            - 歌单封面长按更换，本地存储，可恢复默认
-            - 头像点按更换，上传到服务端并即时刷新
-            - 云同步接通：歌单与播放进度落库
-            - 导入歌单接通：网易云歌单链接可解析曲目
-            - 设置移除音乐源/视频源/设备管理入口
-            - 修 PhotoPicker 闭包编译错误
-            - 版本号 1.12.8
+            - 会员到期本地判定，过期即视为免费，不再能用 VIP 功能
+            - 我的页会员卡显示 VIP/SVIP 徽章与到期日期、剩余天数
+            - 播放器全屏前校验 VIP，无权限直接进卡密页
+            - 歌单支持长按删除，二次确认
+            - 歌单封面临片改用 item 呈现，修复选图无反应
+            - 后台用户支持加 VIP / SVIP / 降级，天数可正可负
+            - 版本号 1.12.9
           files: Isle.tipa

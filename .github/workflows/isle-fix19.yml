@@ -1,0 +1,40 @@
+name: isle-fix19
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch client membership and playlists
+        run: python3 scripts/isle_patch24.py
+      - name: Patch admin roles
+        run: python3 scripts/isle_patch25.py
+      - name: Verify
+        run: |
+          grep -c roleExpired Isle/Network/AuthStore.swift
+          grep -c deleteTarget Isle/Features/LibraryView.swift
+          grep -c grantRole server-v2/public/admin.html
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add -A
+          git diff --cached --stat
+          git commit -m 'feat: 会员到期本地判定与到期显示、VIP/SVIP 徽章、播放器权限拦截、歌单删除确认、封面临片改 item、后台支持 SVIP'
+          git push origin HEAD:'猫巷。'
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'
+      - name: Trigger pack-server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pack-server.yml --ref '猫巷。'
