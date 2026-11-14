@@ -1,0 +1,42 @@
+name: isle-fix16
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '猫巷。'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch server avatar cloud import
+        run: python3 scripts/isle_patch20.py
+      - name: Patch client cover avatar settings
+        run: python3 scripts/isle_patch21.py
+      - name: Verify
+        run: |
+          grep -c 'api/user/avatar' server-v2/server.js
+          grep -c 'api/cloud/playlists' server-v2/server.js
+          grep -c 'api/import/playlist' server-v2/server.js
+          grep -c PhotoPicker Isle/Features/LibraryView.swift Isle/App/RootView.swift
+          grep -c sourcesCard Isle/Features/SettingsView.swift || true
+      - name: Commit and push
+        run: |
+          git config user.name 'Isle Bot'
+          git config user.email 'bot@isle.local'
+          git add -A
+          git diff --cached --stat
+          git commit -m 'feat: 歌单封面与头像可自选上传、云同步与歌单导入接通、设置去掉源与设备入口'
+          git push origin HEAD:'猫巷。'
+      - name: Trigger build-ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run build.yml --ref '猫巷。'
+      - name: Trigger pack-server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pack-server.yml --ref '猫巷。'

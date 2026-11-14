@@ -16,7 +16,7 @@ jobs:
       - name: Install ldid
         run: brew install ldid || true
       - name: Build unsigned ipa + tipa
-        run: VERSION=1.12.6 bash build.sh both
+        run: VERSION=1.12.7 bash build.sh both
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
@@ -32,14 +32,13 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.12.6
-          name: 屿声音乐 v1.12.6（交互与歌词）
+          tag_name: v1.12.7
+          name: 屿声音乐 v1.12.7（封面与头像自选）
           body: |
-            - 上一曲/下一曲/播放键加按压缩放与触感反馈
-            - 搜索结果点击弹出：立即播放 / 加入歌单 / 加入我喜欢的音乐
-            - 歌词加网易云兜底，标题先剥后缀再匹配
-            - 切到养眼 tab 自动收起迷你播放条，切回来再出现
-            - 设置里移除音乐源/视频源入口，统一由后台配置
-            - 服务端视频源支持 POST 接口
-            - 版本号 1.12.6
+            - 歌单封面可长按更换，本地存储
+            - 头像可点按更换，上传到服务端 /api/user/avatar
+            - 云同步接通：歌单与播放进度落库
+            - 导入歌单接通：网易云歌单链接可解析
+            - 设置里移除音乐源/视频源/设备管理入口
+            - 版本号 1.12.7
           files: Isle.tipa
